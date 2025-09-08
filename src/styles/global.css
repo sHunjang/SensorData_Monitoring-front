@@ -1,0 +1,15 @@
+/* 전역 리셋에 준하는 최소 스타일 */
+html,
+body,
+#root {
+    height: 100%;
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, 'Noto Sans KR', sans-serif;
+    background: #f6f7fb;
+    color: #1f2937;
+}
+
+/* 1024x768 기본 대응 + 반응형은 각 컴포넌트에서 media query 병용 */
+:root {
+    --page-max-width: 1400px;
+}
