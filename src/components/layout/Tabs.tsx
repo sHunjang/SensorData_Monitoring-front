@@ -7,11 +7,11 @@ import { NavLink } from 'react-router-dom';
 
 export default function Tabs() {
     const tabs = [
-        { to: '/', label: 'Home' },
-        { to: '/modbus', label: 'Modbus' },
-        { to: '/temp', label: 'Temperature' },
-        { to: '/humidity', label: 'Humidity' },
-        { to: '/solar', label: 'Solar' },
+        { to: '/', label: '홈' },
+        { to: '/modbus', label: '🔌전력' },
+        { to: '/temp', label: '🌡️온도' },
+        { to: '/humidity', label: '💧습도' },
+        { to: '/solar', label: '☀️일사량' },
     ];
 
     return (

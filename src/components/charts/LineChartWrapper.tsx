@@ -1,65 +1,32 @@
-/**
- * 시간축 라인 차트 공용 컴포넌트
- * - Recharts 사용
- * - 좌측 축: kW(p_total), 우측 축: V(voltage)/A(current)
- * - 반응형 컨테이너로 부모 영역에 자동 적응
- */
-import { useMemo } from 'react';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
-import type { ModbusPoint } from '../../api/modbusApi';
+import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { SERIES_LABELS } from '../../constants/labels';
 
-/** 날짜 라벨 포매터: HH:mm 혹은 MM-DD HH:mm */
-function formatTick(ts: string) {
-    const d = new Date(ts);
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    const h = String(d.getHours()).padStart(2, '0');
-    const m = String(d.getMinutes()).padStart(2, '0');
-    return `${mm}-${dd} ${h}:${m}`;
-}
+type Props = { data: any[] };
 
-type Props = {
-    data: ModbusPoint[];
-    height?: number; // 필요시 높이 지정, 미지정 시 부모 높이에 맞춤
-};
+export default function LineChartWrapper({ data }: Props) {
+    if (!data || data.length === 0) return <p>데이터가 없습니다.</p>;
 
-export default function LineChartWrapper({ data, height }: Props) {
-    // null 값은 차트에 그리기 어렵기 때문에 그대로 두되 툴팁에서만 주의
-    const chartData = useMemo(() => data, [data]);
+    // keys 추출 (bucket 제외)
+    const keys = Object.keys(data[0]).filter((k) => k !== 'bucket');
 
     return (
-        <div style={{ width: '100%', height: height ?? '100%' }}>
-            <ResponsiveContainer>
-                <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="bucket" tickFormatter={formatTick} minTickGap={24} />
-                    {/* 좌측: kW */}
-                    <YAxis yAxisId="left" tickCount={6} />
-                    {/* 우측: V/A (스케일이 커서 분리) */}
-                    <YAxis yAxisId="right" orientation="right" tickCount={6} />
-                    <Tooltip
-                        labelFormatter={(v) => formatTick(String(v))}
-                        formatter={(value: any, name) => {
-                            if (value == null) return ['-', name];
-                            return [value, name];
-                        }}
-                    />
-                    <Legend />
-                    {/* 전력(kW) */}
+        <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data}>
+                <XAxis dataKey="bucket" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value: number, name: string) => [`${value}`, SERIES_LABELS[name] ?? name]} />
+                <Legend formatter={(value: string) => SERIES_LABELS[value] ?? value} />
+                {keys.map((key, idx) => (
                     <Line
-                        yAxisId="left"
+                        key={key}
                         type="monotone"
-                        dataKey="p_total"
-                        name="P_total(kW)"
+                        dataKey={key}
+                        name={SERIES_LABELS[key] ?? key} // 범례 한글화
+                        stroke={['#2563eb', '#10b981', '#f59e0b'][idx % 3]}
                         dot={false}
-                        strokeWidth={2}
                     />
-                    {/* 전압(V) */}
-                    <Line yAxisId="right" type="monotone" dataKey="voltage" name="Voltage(V)" dot={false} />
-                    {/* 전류(A) */}
-                    <Line yAxisId="right" type="monotone" dataKey="current" name="Current(A)" dot={false} />
-                </LineChart>
-            </ResponsiveContainer>
-        </div>
+                ))}
+            </LineChart>
+        </ResponsiveContainer>
     );
 }

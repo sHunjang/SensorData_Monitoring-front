@@ -1,95 +1,150 @@
-/**
- * Presenter
- * - 순수 UI 레이아웃
- * - 반응형 Grid로 1024x768 기준 + 확장 대응
- */
 import LineChartWrapper from '../../components/charts/LineChartWrapper';
-import RealtimeGauge from '../../components/charts/RealtimeGauge';
-import LoadingSpinner from '../../components/common/LoadingSpinner';
-import ErrorMessage from '../../components/common/ErrorMessage';
-import type { ModbusPoint } from '../../api/modbusApi';
+import styles from './ModbusPresenter.module.css';
+
+type Stat = { avg: number | null; max: number | null; min: number | null; count: number };
 
 type Props = {
-    data: ModbusPoint[];
-    realtime: number | null;
-    loading: boolean;
-    error: string | null;
+    deviceId: number;
+    setDeviceId: (id: number) => void;
+    series: string;
+    setSeries: (s: string) => void;
+    preset: string;
+    setPreset: (p: string) => void;
+    result: {
+        window: { start: string; end: string };
+        device_id: number;
+        series: string[];
+        data: any[];
+        stats: Record<string, Stat>;
+    } | null;
+    onQuery: () => void;
+    onPrev?: () => void;
+    onNext?: () => void;
+    onZoomIn?: () => void;
+    onZoomOut?: () => void;
 };
 
-export default function ModbusPresenter({ data, realtime, loading, error }: Props) {
+export default function ModbusPresenter({
+    deviceId,
+    setDeviceId,
+    series,
+    setSeries,
+    preset,
+    setPreset,
+    result,
+    onQuery,
+    onPrev,
+    onNext,
+    onZoomIn,
+    onZoomOut,
+}: Props) {
+    const presets = [
+        { value: '15m', label: '15분' },
+        { value: '1h', label: '1시간' },
+        { value: '1d', label: '1일' },
+        { value: '1w', label: '1주' },
+        { value: '1mo', label: '1달' },
+    ];
+
     return (
-        <div className="page">
-            <header className="page__header">
-                <h1>Modbus Monitoring</h1>
-            </header>
+        <div className={styles.container}>
+            <div className={styles.card}>
+                {/* 타이틀 */}
+                <h1 className={styles.title}>📊 전력 데이터 조회</h1>
 
-            <main className="page__content">
-                {/* 좌측: 실시간 게이지, 우측: 라인 차트 */}
-                <section className="grid">
-                    <div className="card">
-                        <h2 className="card__title">실시간 전력</h2>
-                        {loading ? (
-                            <LoadingSpinner />
-                        ) : error ? (
-                            <ErrorMessage message={error} />
-                        ) : (
-                            <RealtimeGauge value={realtime ?? 0} />
-                        )}
-                    </div>
+                {/* 조회 조건 Form */}
+                <div className={styles.form}>
+                    <select
+                        value={deviceId}
+                        onChange={(e) => setDeviceId(Number(e.target.value))}
+                        className={styles.select}
+                    >
+                        {[11, 12, 13, 14, 15].map((id) => (
+                            <option key={id} value={id}>
+                                장치 {id}
+                            </option>
+                        ))}
+                    </select>
 
-                    <div className="card card--span2">
-                        <div className="card__header">
-                            <h2 className="card__title">시간별 전력 추이</h2>
-                            <div className="card__hint">버킷: 1h 평균</div>
+                    <select value={series} onChange={(e) => setSeries(e.target.value)} className={styles.select}>
+                        <option value="voltage">전압(V)</option>
+                        <option value="current">전류(A)</option>
+                        <option value="p_total">유효전력(kW)</option>
+                        <option value="q_total">무효전력(kvar)</option>
+                        <option value="s_total">피상전력(kVA)</option>
+                        <option value="pf_total">역률</option>
+                    </select>
+
+                    <select value={preset} onChange={(e) => setPreset(e.target.value)} className={styles.select}>
+                        {presets.map((p) => (
+                            <option key={p.value} value={p.value}>
+                                {p.label}
+                            </option>
+                        ))}
+                    </select>
+
+                    <button onClick={onQuery} className={styles.button}>
+                        조회
+                    </button>
+                </div>
+
+                {/* 기간 표시 */}
+                {result && (
+                    <p className={styles.period}>
+                        {result.window.start.slice(0, 10)} ~ {result.window.end.slice(0, 10)}
+                    </p>
+                )}
+
+                {/* 그래프 */}
+                <div className={styles.chart}>
+                    {result ? <LineChartWrapper data={result.data} /> : '조회 버튼을 눌러 데이터를 확인하세요'}
+                </div>
+
+                {/* 하단 통계 + 버튼 */}
+                {result && (
+                    <div className={styles.bottom}>
+                        <div className={styles.statsGrid}>
+                            {result.series
+                                .filter((s) => s === series)
+                                .map((s) => {
+                                    const stat = result.stats[s];
+                                    return (
+                                        <div key={s} className={styles.statCard}>
+                                            <p className={styles.statTitle}>
+                                                {s === 'voltage' && '전압(V)'}
+                                                {s === 'current' && '전류(A)'}
+                                                {s === 'p_total' && '유효전력(kW)'}
+                                                {s === 'q_total' && '무효전력(kvar)'}
+                                                {s === 's_total' && '피상전력(kVA)'}
+                                                {s === 'pf_total' && '역률'}
+                                            </p>
+                                            <p className={styles.statText}>평균: {stat.avg ?? '-'}</p>
+                                            <p className={styles.statText}>최대: {stat.max ?? '-'}</p>
+                                            <p className={styles.statText}>최소: {stat.min ?? '-'}</p>
+                                            <p className={styles.statText}>데이터 개수: {stat.count}</p>
+                                        </div>
+                                    );
+                                })}
                         </div>
-                        {loading ? (
-                            <LoadingSpinner />
-                        ) : error ? (
-                            <ErrorMessage message={error} />
-                        ) : (
-                            <div style={{ height: 360 }}>
-                                <LineChartWrapper data={data} />
-                            </div>
-                        )}
+
+                        {/* 네비게이션 버튼 */}
+                        <div className={styles.navButtons}>
+                            <button onClick={onPrev} className={styles.navButton}>
+                                ◀ 이전
+                            </button>
+                            <button onClick={onNext} className={styles.navButton}>
+                                다음 ▶
+                            </button>
+                            <button onClick={onZoomIn} className={styles.navButton}>
+                                + 확대
+                            </button>
+                            <button onClick={onZoomOut} className={styles.navButton}>
+                                - 축소
+                            </button>
+                        </div>
                     </div>
-                </section>
-            </main>
-
-            <style>{`
-        .page { min-height: 100vh; background:#f6f7fb; color:#1f2937; }
-        .page__header { padding:12px 16px; background:#111827; color:#fff; }
-        .page__header h1 { margin:0; font-size:18px; }
-
-        .page__content { padding:12px; max-width:1400px; margin:0 auto; }
-
-        /* 반응형 Grid: 기본 1열, 넓으면 3열(게이지 1, 차트 2) */
-        .grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 12px;
-        }
-        @media (min-width: 1024px) {
-          .grid { grid-template-columns: 1fr 2fr; }
-        }
-
-        .card {
-          background:#fff;
-          border-radius:12px;
-          box-shadow: 0 1px 4px rgba(0,0,0,.06);
-          padding: 12px;
-          min-height: 220px;
-        }
-        .card--span2 { grid-column: span 1; }
-        @media (min-width: 1024px) {
-          .card--span2 { grid-column: span 1; }
-        }
-        .card__header {
-          display:flex; align-items:center; justify-content:space-between;
-          margin-bottom:8px;
-        }
-        .card__title { margin:0; font-size:16px; font-weight:700; }
-        .card__hint { font-size:12px; color:#6b7280; }
-      `}</style>
+                )}
+            </div>
         </div>
     );
 }
