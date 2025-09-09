@@ -1,0 +1,35 @@
+/* src/pages/Home/Home.module.css */
+.grid {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+.card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 12px;
+}
+.title {
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+.value {
+    font-size: 28px;
+}
+.hint {
+    opacity: 0.6;
+    font-size: 12px;
+}
+@media (min-width: 768px) {
+    .grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (min-width: 1024px) {
+    .grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}

@@ -1,0 +1,28 @@
+{
+    "compilerOptions": {
+        /* 최신 JS/모듈 옵션 */
+        "target": "ESNext",
+        "module": "ESNext",
+        "moduleResolution": "Node",
+
+        /* React JSX 설정 */
+        "jsx": "react-jsx",
+
+        /* 편의 옵션 */
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+
+        /* 타입 안정성 */
+        "strict": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+
+        /* 절대경로 alias */
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["src/*"]
+        }
+    },
+    "include": ["src", "src/vite-env.d.ts"],
+    "exclude": ["node_modules", "dist"]
+}
