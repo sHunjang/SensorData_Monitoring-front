@@ -1,44 +1,41 @@
 /**
- * 홈 대시보드
- * - 4개 타일: 실시간 유효전력(p_kw), 당일 전력량(e_kwh),
- *             온도/습도, 일사량
- * - 값은 소수점 둘째 자리까지 표시
+ * HomePresenter.tsx
+ * - HomeContainer에서 받은 데이터를 UI로 표시
+ * - 카드 4개: 실시간 전력량, 당일 전력량, 온도/습도, 일조량
  */
-import styles from './Home.module.css';
+import styles from './HomePresenter.module.css';
 
-function fmt(v: number | null, suffix?: string) {
-    if (v === null || v === undefined || isNaN(v)) return '-';
-    return v.toFixed(2) + (suffix ? ` ${suffix}` : '');
-}
-
-function Tile({ title, value }: { title: string; value: string }) {
-    return (
-        <section className={styles.card}>
-            <div className={styles.title}>{title}</div>
-            <div className={styles.value}>{value}</div>
-        </section>
-    );
-}
-
-export default function HomePresenter({
-    kw,
-    kwh,
-    temperature,
-    humidity,
-    solar,
-}: {
-    kw: number | null;
-    kwh: number | null;
+type Props = {
+    power: number | null;
+    todayKwh: number | null;
     temperature: number | null;
     humidity: number | null;
     solar: number | null;
-}) {
+};
+
+export default function HomePresenter({ power, todayKwh, temperature, humidity, solar }: Props) {
+    const fmt = (v: number | null, unit: string) => (v == null ? '-' : `${v.toFixed(2)} ${unit}`);
+
     return (
         <div className={styles.grid}>
-            <Tile title="실시간 유효전력" value={fmt(kw, 'kW')} />
-            <Tile title="당일 전력량" value={fmt(kwh, 'kWh')} />
-            <Tile title="온도 / 습도" value={`${fmt(temperature, '°C')} / ${fmt(humidity, '%')}`} />
-            <Tile title="일사량" value={fmt(solar, 'W/m²')} />
+            <div className={styles.card}>
+                <h3>실시간 전력량</h3>
+                <div className={styles.value}>{fmt(power, 'kW')}</div>
+            </div>
+            <div className={styles.card}>
+                <h3>당일 전력량</h3>
+                <div className={styles.value}>{fmt(todayKwh, 'kWh')}</div>
+            </div>
+            <div className={styles.card}>
+                <h3>실시간 온도/습도</h3>
+                <div className={styles.value}>
+                    {fmt(temperature, '°C')} / {fmt(humidity, '%')}
+                </div>
+            </div>
+            <div className={styles.card}>
+                <h3>실시간 일사량</h3>
+                <div className={styles.value}>{fmt(solar, 'W/m²')}</div>
+            </div>
         </div>
     );
 }

@@ -5,7 +5,7 @@
  */
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import HomeContainer from './pages/Home/HomeContainer';
-import ModbusContainer from './pages/Modbus/ModebusContainer';
+import ModbusContainer from './pages/Modbus/ModbusContainer';
 import EnvContainer from './pages/Env/EnvContainer';
 import SolarContainer from './pages/Solar/SolarContainer';
 
