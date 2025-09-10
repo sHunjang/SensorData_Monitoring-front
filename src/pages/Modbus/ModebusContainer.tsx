@@ -1,31 +1,44 @@
-// src/pages/Modbus/ModbusContainer.tsx
-/** 전력 컨테이너: 장치 선택 + 프리셋 선택 + 데이터 로딩/에러 상태 관리 */
+/**
+ * 전력 페이지 컨테이너 (풀네임 컬럼 적용)
+ * - 장치 ID 선택
+ * - 기간 프리셋 선택
+ * - 주요 시리즈 조회 및 상태 관리
+ */
 import { useEffect, useState } from 'react';
 import { fetchModbusQuery } from '@/api/modbus';
+
 import ModbusPresenter from './ModebusPresenter';
 
 export default function ModbusContainer() {
     const [deviceId, setDeviceId] = useState(11);
     const [preset, setPreset] = useState<'15m' | '1h' | '1d' | '1w' | '1mo'>('1d');
-    const [data, setData] = useState<any[]>([]),
-        [stats, setStats] = useState<any>({}),
-        [loading, setLoading] = useState(false),
-        [error, setError] = useState<string | null>(null);
+    const [data, setData] = useState<any[]>([]);
+    const [stats, setStats] = useState<any>({});
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        let on = true;
+        let alive = true;
         setLoading(true);
         setError(null);
-        fetchModbusQuery({ deviceId, preset, series: ['p_total', 'voltage', 'current'], maxPoints: 500 })
+
+        fetchModbusQuery({
+            deviceId,
+            // ✅ 풀네임 컬럼 기반 시리즈
+            series: ['total_active_energy_kwh'],
+            preset,
+            maxPoints: 500,
+        })
             .then((res) => {
-                if (!on || !res) return;
+                if (!alive || !res) return;
                 setData(res.data);
                 setStats(res.stats);
             })
-            .catch((e) => on && setError(e?.message ?? 'failed'))
-            .finally(() => on && setLoading(false));
+            .catch((e) => alive && setError(e?.message ?? 'failed'))
+            .finally(() => alive && setLoading(false));
+
         return () => {
-            on = false;
+            alive = false;
         };
     }, [deviceId, preset]);
 

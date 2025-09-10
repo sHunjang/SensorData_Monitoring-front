@@ -1,33 +1,44 @@
-// src/components/metrics/StatsPanel.tsx
-/** 통계 패널: 평균/최대/최소/개수 */
-export default function StatsPanel({ stats, labels }: { stats: Record<string, any>; labels: Record<string, string> }) {
-    const entries = Object.entries(stats || {});
-    if (!entries.length) return null;
+/**
+ * StatsPanel
+ * - 선택된 series 통계만 표시
+ */
+import styles from './StatsPanel.module.css';
+
+type Stat = {
+    avg: number | null;
+    max: number | null;
+    min: number | null;
+    count: number;
+};
+
+export default function StatsPanel({
+    stats,
+    labels,
+    selectedKeys,
+}: {
+    stats: Record<string, Stat>;
+    labels: Record<string, string>;
+    selectedKeys: string[];
+}) {
+    const fmt = (v: number | null) => (v === null || v === undefined || isNaN(v) ? '-' : v.toFixed(2));
+
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
-            {entries.map(([k, s]) => (
-                <div key={k} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, background: '#fff' }}>
-                    <div style={{ fontWeight: 700, marginBottom: 8 }}>{labels[k] ?? k}</div>
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'auto 1fr',
-                            rowGap: 6,
-                            columnGap: 10,
-                            fontSize: 14,
-                        }}
-                    >
-                        <div>평균</div>
-                        <div style={{ textAlign: 'right' }}>{s?.avg ?? '-'}</div>
-                        <div>최소</div>
-                        <div style={{ textAlign: 'right' }}>{s?.min ?? '-'}</div>
-                        <div>최대</div>
-                        <div style={{ textAlign: 'right' }}>{s?.max ?? '-'}</div>
-                        <div>개수</div>
-                        <div style={{ textAlign: 'right' }}>{s?.count ?? '-'}</div>
+        <div className={styles.grid}>
+            {selectedKeys.map((key) => {
+                const s = stats[key];
+                if (!s) return null;
+                return (
+                    <div key={key} className={styles.item}>
+                        <h4 className={styles.label}>{labels[key] ?? key}</h4>
+                        <div className={styles.values}>
+                            <span>평균: {fmt(s.avg)}</span>
+                            <span>최대: {fmt(s.max)}</span>
+                            <span>최소: {fmt(s.min)}</span>
+                            <span>개수: {s.count}</span>
+                        </div>
                     </div>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 }

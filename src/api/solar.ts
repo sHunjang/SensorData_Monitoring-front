@@ -8,3 +8,10 @@ export async function fetchSolarQuery(params: { preset?: '15m' | '1h' | '1d' | '
     url.searchParams.set('max_points', String(maxPoints));
     const r = await fetch(url.toString()); if (!r.ok) return null; return r.json();
 }
+
+
+export async function fetchSolarLatest(): Promise<{solar:number|null;ts:string|null} | null> {
+  const r = await fetch(`${BASE_URL}/data/solar/latest`);
+  if (!r.ok) return null;
+  return r.json();
+}

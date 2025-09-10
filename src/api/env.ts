@@ -12,3 +12,10 @@ export async function fetchEnvQuery(params: { preset?: '15m' | '1h' | '1d' | '1w
     url.searchParams.set('max_points', String(maxPoints));
     const r = await fetch(url.toString()); if (!r.ok) return null; return r.json();
 }
+
+
+export async function fetchEnvLatest(): Promise<{temperature:number|null;humidity:number|null;ts_temperature:string|null;ts_humidity:string|null} | null> {
+  const r = await fetch(`${BASE_URL}/data/env/latest`);
+  if (!r.ok) return null;
+  return r.json();
+}
