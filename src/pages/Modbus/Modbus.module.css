@@ -1,47 +1,44 @@
+/* src/pages/Env/Env.module.css */
 .container {
-    padding: 24px;
+    padding: 16px;
     display: grid;
-    gap: 20px;
-    max-width: 1300px;
+    gap: 12px;
+    max-width: 1200px;
     margin: 0 auto;
 }
-
 .controls {
     display: flex;
-    gap: 20px;
+    gap: 12px;
     align-items: center;
     flex-wrap: wrap;
-    font-size: 16px;
 }
-
 .input {
-    margin-left: 6px;
-    padding: 8px 12px;
-    border: 1px solid #d1d5db;
+    margin-left: 8px;
+    padding: 6px 8px;
+    border: 1px solid #e5e7eb;
     border-radius: 8px;
-    font-size: 15px;
 }
-
-/* 다중 선택 드롭다운 */
-.multiSelect {
-    margin-left: 6px;
-    padding: 6px 10px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 15px;
-    min-width: 240px;
-    height: 100px; /* 여러 개 선택 가능하게 영역 확보 */
-}
-
 .card {
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 12px;
-    padding: 20px;
+    padding: 12px;
+}
+.section {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 700;
 }
 
-.section {
-    margin: 0 0 12px 0;
-    font-size: 18px;
-    font-weight: 700;
+.button {
+    padding: 8px 12px;
+    border: 1px solid #2563eb;
+    color: #1e3a8a;
+    background: #eff6ff;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.button[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
 }

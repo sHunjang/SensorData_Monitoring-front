@@ -1,17 +1,9 @@
-/**
- * SolarPresenter.tsx
- * - 일사량 페이지 UI
- * - 컨트롤(프리셋) + 라인차트 + 통계
- */
-
+import styles from '../Env/Env.module.css';
 import LineChartWrapper from '@/components/charts/LineChartWrapper';
 import Loading from '@/components/common/Loading';
 import Error from '@/components/common/Error';
 import StatsPanel from '@/components/metrics/StatsPanel';
-
-const LABELS: Record<string, string> = {
-    solar: '일사량(W/m²)',
-};
+import { SERIES_LABELS } from '@/constants/labels';
 
 type Props = {
     preset: '15m' | '1h' | '1d' | '1w' | '1mo';
@@ -20,19 +12,19 @@ type Props = {
     stats: any;
     loading: boolean;
     error: string | null;
+    onQuery: () => void;
 };
 
-export default function SolarPresenter({ preset, setPreset, data, stats, loading, error }: Props) {
+export default function SolarPresenter({ preset, setPreset, data, stats, loading, error, onQuery }: Props) {
     return (
-        <div className="grid" style={{ padding: 16, gap: 12 }}>
-            {/* 컨트롤 */}
-            <div className="card">
+        <div className={styles.container}>
+            <div className={styles.controls}>
                 <label>
                     Interval
                     <select
                         value={preset}
                         onChange={(e) => setPreset(e.target.value as Props['preset'])}
-                        style={{ marginLeft: 8 }}
+                        className={styles.input}
                     >
                         <option value="15m">15분</option>
                         <option value="1h">1시간</option>
@@ -41,23 +33,25 @@ export default function SolarPresenter({ preset, setPreset, data, stats, loading
                         <option value="1mo">1달</option>
                     </select>
                 </label>
+
+                <button onClick={onQuery} className={styles.button} disabled={loading}>
+                    {loading ? '조회 중...' : '그래프 조회'}
+                </button>
             </div>
 
-            {/* 차트 */}
-            <div className="card" style={{ height: 360 }}>
+            <div className={styles.card} style={{ height: 360 }}>
                 {loading ? (
                     <Loading />
                 ) : error ? (
                     <Error msg={error} />
                 ) : (
-                    <LineChartWrapper data={data} keys={['solar']} labels={LABELS} />
+                    <LineChartWrapper data={data} keys={['solar']} labels={SERIES_LABELS} />
                 )}
             </div>
 
-            {/* 통계 */}
-            <div className="card">
-                <h3 style={{ margin: '0 0 8px 0' }}>요약 통계</h3>
-                <StatsPanel stats={stats} labels={LABELS} />
+            <div className={styles.card}>
+                <h3 className={styles.section}>요약 통계</h3>
+                <StatsPanel stats={stats} labels={SERIES_LABELS} />
             </div>
         </div>
     );

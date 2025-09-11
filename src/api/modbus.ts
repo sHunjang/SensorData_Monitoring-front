@@ -6,10 +6,12 @@ export type Stat = { avg: number | null; max: number | null; min: number | null;
 export type ModbusRealtime = {
     time_stamp: string;
     device_id: number;
-    total_active_power_kW?: number | null;
-    voltage?: number | null;
-    phase_config?: "3P3W" | "3P4W";
+    power: number | null;    // total_active_power_kw
+    current: number | null;  // sum_line_currents_a
+    voltage: number | null;  // avg_line_to_line_volts_v
+    energy: number | null;   // total_active_energy_kWh
 };
+
 
 export type ModbusQueryResp = {
     window: { start: string; end: string };
@@ -22,9 +24,9 @@ export type ModbusQueryResp = {
 };
 
 export async function fetchRealtime(deviceId: number): Promise<ModbusRealtime | null> {
-    const r = await fetch(`${BASE_URL}/data/modbus/realtime?device_id=${deviceId}`);
-    if (!r.ok) return null;
-    return r.json();
+    const res = await fetch(`${BASE_URL}/data/modbus/realtime?device_id=${deviceId}`);
+    if (!res.ok) return null;
+    return res.json();
 }
 
 export async function fetchModbusQuery(params: {
@@ -50,7 +52,7 @@ export async function fetchModbusQuery(params: {
 
 
 export async function fetchEnergyToday(deviceId: number) {
-    const url = `${BASE_URL}/data/modbus/energy_today?device_id=${deviceId}`;
+    const url = `${BASE_URL}/data/modbus/realtime?device_id=${deviceId}`;
     const r = await fetch(url);
     if (!r.ok) return null;
     return r.json();

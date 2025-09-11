@@ -1,8 +1,8 @@
 /**
  * HomeContainer.tsx
- * - HomePresenter에 필요한 데이터를 수집하고 상태 관리
- * - 전력량계(ID=11) 실시간 전력량, 당일 전력량
- * - 실시간 온도/습도, 실시간 일조량
+ * - 홈 대시보드 상태 관리
+ * - 실시간 전력, 당일 전력량, 실시간 온습도, 실시간 일사량
+ * - 에러 발생 시 Error 컴포넌트로 표시
  */
 import { useEffect, useState } from 'react';
 import HomePresenter from './HomePresenter';
@@ -17,13 +17,23 @@ export default function HomeContainer() {
     const [humidity, setHumidity] = useState<number | null>(null);
     const [solar, setSolar] = useState<number | null>(null);
 
-    // 1. 실시간 전력량 (ID=11)
+    const [powerError, setPowerError] = useState<string | null>(null);
+    const [todayError, setTodayError] = useState<string | null>(null);
+    const [envError, setEnvError] = useState<string | null>(null);
+    const [solarError, setSolarError] = useState<string | null>(null);
+
+    // 실시간 전력
     useEffect(() => {
         let alive = true;
         const poll = async () => {
-            const r: ModbusRealtime | null = await fetchRealtime(11);
-            if (!alive) return;
-            setPower(r?.total_active_power_kW ?? null);
+            try {
+                const r: ModbusRealtime | null = await fetchRealtime(11);
+                if (!alive) return;
+                setPower(r?.power ?? null);
+                setPowerError(null);
+            } catch (e: any) {
+                setPowerError(e?.response?.data?.detail ?? e?.message ?? 'unknown error');
+            }
         };
         poll();
         const timer = setInterval(poll, 5000);
@@ -33,66 +43,80 @@ export default function HomeContainer() {
         };
     }, []);
 
-    // 2. 당일 전력량 (ID=11)
+    // 당일 전력량
     useEffect(() => {
         let alive = true;
         const load = async () => {
-            const res = await fetchModbusQuery({
-                deviceId: 11,
-                series: ['total_active_energy_kWh'],
-                preset: '1d',
-            });
-            if (!alive || !res) return;
-            const rows = res.data;
-            if (rows.length >= 2) {
-                const values = rows.map((r) => r.total_active_energy_kWh).filter((v) => v != null) as number[];
-                if (values.length > 1) {
-                    const delta = Math.max(...values) - Math.min(...values);
-                    setTodayKwh(delta);
+            try {
+                const res = await fetchModbusQuery({
+                    deviceId: 11,
+                    series: ['energy'],
+                    preset: '1d',
+                });
+                if (!alive || !res) return;
+                const values = res.data.map((r) => r.energy).filter((v) => v != null) as number[];
+                if (values.length >= 2) {
+                    const delta = values[values.length - 1] - values[0];
+                    setTodayKwh(delta >= 0 ? delta : null);
+                } else {
+                    setTodayKwh(null);
                 }
+                setTodayError(null);
+            } catch (e: any) {
+                setTodayError(e?.response?.data?.detail ?? e?.message ?? 'unknown error');
             }
         };
         load();
-        const timer = setInterval(load, 60000); // 1분마다 업데이트
+        const timer = setInterval(load, 60000);
         return () => {
             alive = false;
             clearInterval(timer);
         };
     }, []);
 
-    // 3. 실시간 온습도
+    // 실시간 온습도
     useEffect(() => {
         let alive = true;
         const poll = async () => {
-            const res: EnvResp | null = await fetchEnvQuery({ preset: '15m', maxPoints: 1 });
-            if (!alive || !res) return;
-            const last = res.data.at(-1);
-            if (last) {
-                setTemperature(last.temperature ?? null);
-                setHumidity(last.humidity ?? null);
+            try {
+                const res: EnvResp | null = await fetchEnvQuery({ preset: '15m', maxPoints: 1 });
+                if (!alive || !res) return;
+                const last = res.data.at(-1);
+                if (last) {
+                    setTemperature(last.temperature ?? null);
+                    setHumidity(last.humidity ?? null);
+                }
+                setEnvError(null);
+            } catch (e: any) {
+                setEnvError(e?.response?.data?.detail ?? e?.message ?? 'unknown error');
             }
         };
         poll();
-        const timer = setInterval(poll, 30000); // 30초마다
+        const timer = setInterval(poll, 30000);
         return () => {
             alive = false;
             clearInterval(timer);
         };
     }, []);
 
-    // 4. 실시간 일조량
+    // 실시간 일사량
     useEffect(() => {
         let alive = true;
         const poll = async () => {
-            const res: SolarResp | null = await fetchSolarQuery({ preset: '15m', maxPoints: 1 });
-            if (!alive || !res) return;
-            const last = res.data.at(-1);
-            if (last) {
-                setSolar(last.solar ?? null);
+            try {
+                const res: SolarResp | null = await fetchSolarQuery({ preset: '15m', maxPoints: 1 });
+                if (!alive || !res) return;
+                const last = res.data.at(-1);
+                if (last) {
+                    setSolar(last.solar ?? null);
+                }
+                setSolarError(null);
+            } catch (e: any) {
+                setSolarError(e?.response?.data?.detail ?? e?.message ?? 'unknown error');
             }
         };
         poll();
-        const timer = setInterval(poll, 30000); // 30초마다
+        const timer = setInterval(poll, 30000);
         return () => {
             alive = false;
             clearInterval(timer);
@@ -100,6 +124,16 @@ export default function HomeContainer() {
     }, []);
 
     return (
-        <HomePresenter power={power} todayKwh={todayKwh} temperature={temperature} humidity={humidity} solar={solar} />
+        <HomePresenter
+            power={power}
+            todayKwh={todayKwh}
+            temperature={temperature}
+            humidity={humidity}
+            solar={solar}
+            powerError={powerError}
+            todayError={todayError}
+            envError={envError}
+            solarError={solarError}
+        />
     );
 }
