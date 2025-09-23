@@ -5,6 +5,7 @@
  * - fetchEnvQuery 사용, normalizeRows로 bucket -> epoch ms 변환 및 정렬
  * - 통계(calcStats)와 로그 관리를 포함
  */
+// src/pages/Env/EnvContainer.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
 import EnvPresenter from './EnvPresenter';
 import { fetchEnvQuery } from '@/api/env';
@@ -12,19 +13,12 @@ import { getErrorMessage } from '@/lib/http';
 import { normalizeRows } from '@/lib/time';
 
 type Preset = '15m' | '1h' | '1d' | '1w' | '1mo';
-type Stat = { avg: number | null; max: number | null; min: number | null; count: number };
-
-function calcStats(values: (number | null | undefined)[]): Stat {
-    const nums = values.filter((v): v is number => v != null && Number.isFinite(v));
-    if (!nums.length) return { avg: null, max: null, min: null, count: 0 };
-    const sum = nums.reduce((a, b) => a + b, 0);
-    return { avg: +(sum / nums.length).toFixed(2), max: Math.max(...nums), min: Math.min(...nums), count: nums.length };
-}
 
 export default function EnvContainer() {
     const [preset, setPreset] = useState<Preset>('1d');
     const [mode, setMode] = useState<'realtime' | 'range'>('realtime');
 
+    const [deviceId, setDeviceId] = useState<number | null>(21); // 기본 21
     const [data, setData] = useState<any[]>([]);
     const [stats, setStats] = useState<any>({});
     const [loading, setLoading] = useState(false);
@@ -34,16 +28,25 @@ export default function EnvContainer() {
 
     const log = (m: string) => setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${m}`].slice(-200));
 
-    const recompute = useCallback((rows: any[]) => {
-        setStats({
-            temperature: calcStats(rows.map((r) => r?.temperature)),
-            humidity: calcStats(rows.map((r) => r?.humidity)),
-        });
-    }, []);
+    const recompute = (rows: any[]) => {
+        const temps = rows.map((r) => r.temperature).filter((v): v is number => v != null && Number.isFinite(v));
+        const hums = rows.map((r) => r.humidity).filter((v): v is number => v != null && Number.isFinite(v));
+        const calc = (arr: number[]) =>
+            arr.length
+                ? {
+                      avg: +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2),
+                      max: Math.max(...arr),
+                      min: Math.min(...arr),
+                      count: arr.length,
+                  }
+                : { avg: null, max: null, min: null, count: 0 };
+        setStats({ temperature: calc(temps), humidity: calc(hums) });
+    };
 
     const pullOnce = useCallback(async () => {
+        setLoading(true);
         try {
-            const res = await fetchEnvQuery({ preset: '15m', max_points: 200 });
+            const res = await fetchEnvQuery({ preset: '15m', max_points: 200, device_id: deviceId ?? undefined });
             const rows = normalizeRows(res.data);
             if (rows.length) {
                 setData((prev) => {
@@ -51,25 +54,32 @@ export default function EnvContainer() {
                     recompute(next);
                     return next;
                 });
-                log(`realtime ok t=${rows.at(-1)?.temperature} h=${rows.at(-1)?.humidity}`);
+                log(`realtime ok device=${deviceId} t=${rows.at(-1)?.temperature} h=${rows.at(-1)?.humidity}`);
+            } else {
+                // 데이터 없음도 상태 갱신
+                setData([]);
+                setStats({});
+                log(`realtime empty device=${deviceId}`);
             }
             setError(null);
         } catch (e) {
             const msg = getErrorMessage(e);
             setError(msg);
             log(`realtime error ${msg}`);
+        } finally {
+            setLoading(false);
         }
-    }, [recompute]);
+    }, [deviceId]);
 
     const queryRange = useCallback(async () => {
         setLoading(true);
-        setError(null);
         try {
-            const res = await fetchEnvQuery({ preset, max_points: 1000 });
+            const res = await fetchEnvQuery({ preset, max_points: 1000, device_id: deviceId ?? undefined });
             const rows = normalizeRows(res.data);
             setData(rows);
             recompute(rows);
-            log(`range ok ${preset} n=${rows.length}`);
+            log(`range ok device=${deviceId} n=${rows.length}`);
+            setError(null);
         } catch (e) {
             const msg = getErrorMessage(e);
             setError(msg);
@@ -79,7 +89,7 @@ export default function EnvContainer() {
         } finally {
             setLoading(false);
         }
-    }, [preset, recompute]);
+    }, [preset, deviceId]);
 
     useEffect(() => {
         window.clearInterval(timer.current);
@@ -102,6 +112,8 @@ export default function EnvContainer() {
             loading={loading}
             error={error}
             logs={logs}
+            deviceId={deviceId}
+            setDeviceId={setDeviceId}
         />
     );
 }

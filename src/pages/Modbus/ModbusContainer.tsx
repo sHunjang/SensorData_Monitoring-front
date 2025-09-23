@@ -1,11 +1,16 @@
-// src/pages/Modbus/ModbusContainer.tsx
 /**
- * ModbusContainer
- * - device 선택, series(column) 선택, mode(realtime/range)
- * - realtime: fetchRealtime -> metricKey 매핑 -> row 생성 (bucket epoch ms)
- * - range: fetchModbusQuery -> normalizeRows 적용
- * - setData는 함수형 업데이트로 동기성 이슈 방지
+ * ModbusContainer.tsx
+ *
+ * 역할:
+ * - Modbus(전력량계) 페이지의 데이터 로직을 담당.
+ * - realtime / range 모드, device/series 선택, preset 관리.
+ * - API 호출(fetchModbusQuery, fetchRealtime), 응답 방어적 파싱, normalizeRows 사용.
+ *
+ * 주의:
+ * - fetchModbusQuery, fetchRealtime이 src/api/modbus 에 있어야 함.
+ * - normalizeRows는 bucket -> epoch(ms) 변환을 보장해야 함.
  */
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ModbusPresenter from './ModbusPresenter';
 import { fetchModbusQuery, fetchRealtime } from '@/api/modbus';
@@ -15,29 +20,14 @@ import { normalizeRows } from '@/lib/time';
 type Preset = '15m' | '1h' | '1d' | '1w' | '1mo';
 type SeriesKey = 'power' | 'current' | 'voltage' | 'energy' | 'pf';
 
-function metricKeyForColumn(col: SeriesKey) {
-    switch (col) {
-        case 'power':
-            return 'p_kw';
-        case 'energy':
-            return 'e_kwh';
-        case 'voltage':
-            return 'v_avg';
-        case 'current':
-            return 'i_sum';
-        case 'pf':
-            return 'pf';
-        default:
-            return col;
-    }
-}
-
 export default function ModbusContainer() {
+    // UI state
     const [deviceId, setDeviceId] = useState<number>(11);
     const [column, setColumn] = useState<SeriesKey>('power');
     const [preset, setPreset] = useState<Preset>('1d');
     const [mode, setMode] = useState<'realtime' | 'range'>('realtime');
 
+    // data state
     const [data, setData] = useState<any[]>([]);
     const [stats, setStats] = useState<any>({});
     const [loading, setLoading] = useState(false);
@@ -45,8 +35,11 @@ export default function ModbusContainer() {
     const [logs, setLogs] = useState<string[]>([]);
     const timer = useRef<number | undefined>(undefined);
 
-    const log = (m: string) => setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${m}`].slice(-200));
+    const deviceOptions = [11, 12, 13]; // 필요 시 실제 장치 목록으로 교체
 
+    const log = (m: string) => setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${m}`].slice(-300));
+
+    // 간단 통계 계산 (avg/max/min/count)
     const recompute = useCallback(
         (rows: any[]) => {
             const vals = rows.map((r) => r[column]).filter((v): v is number => v != null && Number.isFinite(v));
@@ -67,17 +60,38 @@ export default function ModbusContainer() {
         [column]
     );
 
+    // realtime: fetchRealtime returns an object with time_stamp and metrics (defensive)
     const pullOnce = useCallback(async () => {
         try {
             const r = await fetchRealtime(deviceId);
-            const metricKey = metricKeyForColumn(column);
-            const value = r?.metrics?.[metricKey] ?? null;
-            const bucketEpoch = r?.time_stamp ? Date.parse(r.time_stamp) : null;
+            if (!r) throw new Error('empty realtime response');
 
-            const row = {
-                bucket: bucketEpoch,
-                [column]: typeof value === 'number' ? value : value == null ? null : Number(value),
-            };
+            // metrics parsing (defensive)
+            const metricMap: Record<string, any> = r.metrics ?? {};
+            const metricKey = column === 'power' ? 'p_kw' : column === 'energy' ? 'e_kwh' : column;
+            let rawVal = metricMap[metricKey] ?? metricMap[column] ?? null;
+            const value = rawVal == null ? null : typeof rawVal === 'number' ? rawVal : Number(rawVal);
+
+            // bucket: try time_stamp then fallback to Date.now()
+            const raw = r as any; // 넘어오는 응답이 다양한 스키마일 수 있으므로 방어적으로 처리
+            const tsCandidate = raw?.time_stamp ?? raw?.timestamp ?? raw?.time ?? null;
+
+            let bucket: number;
+            if (tsCandidate == null) {
+                bucket = Date.now();
+            } else if (typeof tsCandidate === 'number') {
+                // already epoch ms or seconds? assume ms; if seconds, adjust where you create timestamps on server
+                bucket = tsCandidate;
+            } else if (typeof tsCandidate === 'string') {
+                // ISO string with offset -> Date.parse가 잘 처리함
+                bucket = Number.isNaN(Date.parse(tsCandidate)) ? Date.now() : Date.parse(tsCandidate);
+            } else if (tsCandidate instanceof Date) {
+                bucket = tsCandidate.getTime();
+            } else {
+                bucket = Date.now();
+            }
+
+            const row = { bucket, [column]: value };
 
             setData((prev) => {
                 const next = [...prev.slice(-299), row];
@@ -86,7 +100,7 @@ export default function ModbusContainer() {
             });
 
             setError(null);
-            log('realtime ok');
+            log(`realtime ok device=${deviceId} col=${column} v=${value}`);
         } catch (e) {
             const msg = getErrorMessage(e);
             setError(msg);
@@ -94,17 +108,28 @@ export default function ModbusContainer() {
         }
     }, [deviceId, column, recompute]);
 
+    // range query: fetchModbusQuery -> normalizeRows -> ensure column key exists
     const queryRange = useCallback(async () => {
         setLoading(true);
-        setError(null);
         try {
             const res = await fetchModbusQuery({ device_id: deviceId, series: [column], preset, max_points: 1000 });
-            const rows = normalizeRows(res.data);
-            // ensure numeric series values
-            const norm = rows.map((r) => ({ ...r, [column]: r[column] == null ? null : Number(r[column]) }));
+            const raw = Array.isArray(res.data) ? res.data : [];
+            const rows = normalizeRows(raw); // normalizeRows should convert bucket -> epoch(ms)
+            const norm = rows.map((r: any) => {
+                // fallback keys mapping: requested column or metric-key-like names
+                const candidate =
+                    r[column] ??
+                    r.p_kw ??
+                    r.e_kwh ??
+                    r[Object.keys(r).find((k) => k.includes(column)) as string] ??
+                    null;
+                const v = candidate == null ? null : typeof candidate === 'number' ? candidate : Number(candidate);
+                return { ...r, [column]: v };
+            });
             setData(norm);
             recompute(norm);
-            log(`range ok ${preset} n=${norm.length}`);
+            log(`range ok device=${deviceId} preset=${preset} n=${norm.length}`);
+            setError(null);
         } catch (e) {
             const msg = getErrorMessage(e);
             setError(msg);
@@ -116,6 +141,7 @@ export default function ModbusContainer() {
         }
     }, [deviceId, column, preset, recompute]);
 
+    // polling management
     useEffect(() => {
         window.clearInterval(timer.current);
         if (mode === 'realtime') {
@@ -129,6 +155,7 @@ export default function ModbusContainer() {
         <ModbusPresenter
             deviceId={deviceId}
             setDeviceId={setDeviceId}
+            deviceOptions={deviceOptions}
             column={column}
             setColumn={setColumn}
             preset={preset}

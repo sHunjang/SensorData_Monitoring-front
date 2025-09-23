@@ -1,32 +1,252 @@
-/* Modbus.module.css
-   - 전력 페이지 전용 스타일(Env 스타일을 차용 가능)
-*/
+/* Modbus 페이지 - 무채색 + 블루 포인트 */
 .container {
     padding: 16px;
-    display: grid;
-    gap: 12px;
-    max-width: 1200px;
+    background: #f8f9fa;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
+
+.content {
+    max-width: 1000px;
     margin: 0 auto;
 }
-.controls {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    flex-wrap: wrap;
+
+/* 페이지 헤더 */
+.header {
+    text-align: center;
+    margin-bottom: 20px;
 }
-.card {
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 12px;
-}
-.section {
-    margin: 0 0 8px 0;
-    font-size: 16px;
+
+.title {
+    font-size: 26px;
     font-weight: 700;
+    color: #212529;
+    margin: 0 0 8px 0;
 }
-.input {
-    padding: 6px 8px;
-    border: 1px solid #e5e7eb;
+
+.subtitle {
+    font-size: 16px;
+    color: #6c757d;
+    margin: 0;
+}
+
+/* 컨트롤 섹션 */
+.controls {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.controlsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    align-items: end;
+}
+
+.controlGroup {
+    display: flex;
+    flex-direction: column;
+}
+
+.controlGroup label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 4px;
+    font-size: 14px;
+}
+
+.controlGroup select,
+.controlGroup button {
+    padding: 8px 12px;
+    border: 2px solid #ced4da;
     border-radius: 8px;
+    font-size: 14px;
+    background: white;
+    color: #495057;
+}
+
+.controlGroup select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+}
+
+.controlGroup button {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.controlGroup button:hover {
+    background: #0056b3;
+    transform: translateY(-1px);
+}
+
+/* 차트 섹션 */
+.chartSection {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    min-height: 350px;
+    position: relative;
+}
+
+.chartSection::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: #007bff;
+    border-radius: 12px 12px 0 0;
+}
+
+.chartHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #f8f9fa;
+}
+
+.chartTitle {
+    font-size: 18px;
+    font-weight: 600;
+    color: #212529;
+    margin: 0;
+}
+
+.currentValue {
+    text-align: right;
+}
+
+.currentValueLabel {
+    font-size: 12px;
+    color: #6c757d;
+    margin-bottom: 4px;
+}
+
+.currentValueNumber {
+    font-size: 20px;
+    font-weight: 700;
+    color: #007bff;
+}
+
+.currentValueUnit {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+/* 통계 그리드 */
+.statsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.statCard {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.statCard::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: #007bff;
+}
+
+.statLabel {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.statValue {
+    font-size: 18px;
+    font-weight: 700;
+    color: #007bff;
+    margin: 0;
+}
+
+.statUnit {
+    font-size: 11px;
+    color: #6c757d;
+}
+
+/* 로그 섹션 */
+.logSection {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.logTitle {
+    font-size: 16px;
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.logEntry {
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    color: #6c757d;
+    padding: 4px 0;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+/* 1024x768 최적화 */
+@media (max-width: 1024px) and (max-height: 768px) {
+    .container {
+        padding: 12px;
+    }
+
+    .title {
+        font-size: 22px;
+    }
+
+    .chartSection {
+        min-height: 300px;
+        padding: 16px;
+    }
+
+    .statsGrid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .logSection {
+        max-height: 150px;
+    }
 }

@@ -5,13 +5,17 @@
  */
 import { fetchJSON } from "@/lib/http";
 
-export async function fetchSolarQuery(params: { preset?: string; max_points?: number; start?: string; end?: string } = {}) {
+export async function fetchSolarQuery(params: { preset?: string; max_points?: number; start?: string; end?: string, device_id?: number } = {}) {
     const q = new URLSearchParams();
     if (params.preset) q.set("preset", params.preset);
     if (params.start) q.set("start", params.start);
     if (params.end) q.set("end", params.end);
+    if (params.device_id != null) q.set("device_id", String(params.device_id));
+
     q.set("max_points", String(params.max_points ?? 500));
+
     const json = await fetchJSON<any>(`/data/solar/query?${q.toString()}`);
+
     return {
         window: json?.window ?? null,
         bucket: json?.bucket ?? "1h",

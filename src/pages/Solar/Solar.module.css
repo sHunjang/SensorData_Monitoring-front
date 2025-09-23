@@ -1,33 +1,210 @@
-/* Solar.module.css
-   - Solar 페이지 전용 스타일
-*/
+/* 태양광 페이지 - 무채색 + 오렌지 포인트 */
 .container {
     padding: 16px;
-    display: grid;
-    gap: 12px;
-    max-width: 1200px;
+    background: #f8f9fa;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
+
+.content {
+    max-width: 1000px;
     margin: 0 auto;
 }
-.controls {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    flex-wrap: wrap;
+
+/* 현재 값 카드 */
+.currentValueCard {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 16px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
 }
-.input {
-    margin-left: 8px;
-    padding: 6px 8px;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
+
+.currentValueCard::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: #fd7e14;
 }
-.card {
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 12px;
+
+.currentValueLabel {
+    font-size: 14px;
+    color: #6c757d;
+    margin-bottom: 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
-.section {
-    margin: 0 0 8px 0;
+
+.currentValueNumber {
+    font-size: 42px;
+    font-weight: 800;
+    color: #fd7e14;
+    margin: 0;
+}
+
+.currentValueUnit {
     font-size: 16px;
+    color: #6c757d;
+    margin-left: 8px;
+}
+
+/* 컨트롤 섹션 */
+.controls {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* 차트 섹션 */
+.chartSection {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    min-height: 350px;
+    position: relative;
+}
+
+.chartSection::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: #fd7e14;
+    border-radius: 12px 12px 0 0;
+}
+
+.chartTitle {
+    font-size: 18px;
+    font-weight: 600;
+    color: #212529;
+    margin: 0 0 16px 0;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #f8f9fa;
+}
+
+/* 통계 그리드 */
+.statsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.statCard {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.statCard::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: #fd7e14;
+}
+
+.statLabel {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.statValue {
+    font-size: 20px;
     font-weight: 700;
+    color: #fd7e14;
+    margin: 0;
+}
+
+.statUnit {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+/* 로그 섹션 */
+.logSection {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.logTitle {
+    font-size: 16px;
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.logEntry {
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    color: #6c757d;
+    padding: 4px 0;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+/* 1024x768 최적화 */
+@media (max-width: 1024px) and (max-height: 768px) {
+    .container {
+        padding: 12px;
+    }
+
+    .currentValueNumber {
+        font-size: 36px;
+    }
+
+    .chartSection {
+        min-height: 300px;
+        padding: 16px;
+    }
+
+    .statsGrid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* 작은 화면 대응 */
+@media (max-width: 768px) {
+    .statsGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .statsGrid {
+        grid-template-columns: 1fr;
+    }
 }

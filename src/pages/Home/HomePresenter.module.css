@@ -1,21 +1,141 @@
-/* HomePresenter.module.css
-   - 홈 카드 레이아웃
-*/
+/* 홈 대시보드 - 무채색 베이스 + 포인트 색상 */
+.dashboard {
+    padding: 20px;
+    background: #f8f9fa;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
+
+/* 2x2 그리드로 고정 */
 .grid {
     display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
     gap: 16px;
-    padding: 16px;
-    grid-template-columns: repeat(2, 1fr);
+    max-width: 980px;
+    height: calc(100vh - 80px);
+    margin: 0 auto;
 }
+
 .card {
-    background: #fff;
-    border: 1px solid #e5e7eb;
+    background: white;
     border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s ease;
 }
-.value {
-    font-size: 32px;
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+/* 각 카드의 상단 포인트 색상 바 */
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+}
+
+.card:nth-child(1)::before {
+    background: #007bff;
+} /* 전력 - 파랑 */
+.card:nth-child(2)::before {
+    background: #28a745;
+} /* 에너지 - 초록 */
+.card:nth-child(3)::before {
+    background: #ffc107;
+} /* 온도 - 노랑 */
+.card:nth-child(4)::before {
+    background: #17a2b8;
+} /* 태양광 - 시안 */
+
+.card h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
     font-weight: 600;
-    margin-top: 8px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.value {
+    font-size: 36px;
+    font-weight: 700;
+    color: #212529;
+    margin: 8px 0;
+}
+
+/* 각 카드의 값에 포인트 색상 적용 */
+.card:nth-child(1) .value {
+    color: #007bff;
+}
+.card:nth-child(2) .value {
+    color: #28a745;
+}
+.card:nth-child(3) .value {
+    color: #ffc107;
+}
+.card:nth-child(4) .value {
+    color: #17a2b8;
+}
+
+.unit {
+    font-size: 14px;
+    color: #6c757d;
+    margin-left: 4px;
+}
+
+.error {
+    color: #dc3545;
+    background: #f8d7da;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    border: 1px solid #f5c6cb;
+    width: 100%;
+}
+
+/* 1024x768 최적화 */
+@media (max-width: 1024px) and (max-height: 768px) {
+    .dashboard {
+        padding: 16px;
+    }
+
+    .grid {
+        height: calc(100vh - 64px);
+        max-width: 992px;
+    }
+
+    .card {
+        padding: 20px;
+    }
+
+    .value {
+        font-size: 32px;
+    }
+}
+
+/* 작은 화면 대응 */
+@media (max-width: 768px) {
+    .grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(4, minmax(120px, 1fr));
+        height: auto;
+    }
+
+    .card {
+        min-height: 120px;
+    }
 }

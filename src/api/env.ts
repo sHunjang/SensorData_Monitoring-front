@@ -4,14 +4,16 @@
  * - 반환: { window,bucket,series,data,stats,error }
  * - data entries: { bucket: ISOstring, temperature, humidity, device_id? }
  */
+
 import { fetchJSON } from "@/lib/http";
 
-export async function fetchEnvQuery(params: { preset?: string; max_points?: number; start?: string; end?: string } = {}) {
+export async function fetchEnvQuery(params: { preset?: string; max_points?: number; start?: string; end?: string; device_id?: number } = {}) {
     const q = new URLSearchParams();
     if (params.preset) q.set("preset", params.preset);
     if (params.start) q.set("start", params.start);
     if (params.end) q.set("end", params.end);
     q.set("max_points", String(params.max_points ?? 500));
+    if (params.device_id != null) q.set("device_id", String(params.device_id));
     const json = await fetchJSON<any>(`/data/env/query?${q.toString()}`);
     return {
         window: json?.window ?? null,
