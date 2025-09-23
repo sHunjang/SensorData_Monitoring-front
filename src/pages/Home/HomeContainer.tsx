@@ -105,7 +105,7 @@ export default function HomeContainer() {
             }
         };
         poll();
-        const id = setInterval(poll, 5000);
+        const id = setInterval(poll, 1000);
         return () => {
             alive = false;
             clearInterval(id);
@@ -131,7 +131,7 @@ export default function HomeContainer() {
             }
         };
         load();
-        const id = setInterval(load, 60_000);
+        const id = setInterval(load, 1000);
         return () => {
             alive = false;
             clearInterval(id);
@@ -167,7 +167,7 @@ export default function HomeContainer() {
             }
         };
         poll();
-        const id = setInterval(poll, 30_000);
+        const id = setInterval(poll, 1000);
         return () => {
             alive = false;
             clearInterval(id);
@@ -181,25 +181,20 @@ export default function HomeContainer() {
         let alive = true;
         const poll = async () => {
             try {
-                const res = await fetchSolarQuery({ preset: '15m', max_points: 1, device_id: undefined });
+                // device_id=1 명시 추가
+                const res = await fetchSolarQuery({ preset: '15m', max_points: 1, device_id: 1 });
                 if (!alive) return;
-                const rows = normalizeRows(res?.data ?? []);
-                const last = rows?.length ? rows[rows.length - 1] : null;
-                setRawSolarLast(last ?? null);
-
-                // 방어적 필드명: solar or solar_irradiance_wm2
-                const sVal = last?.solar ?? last?.solar_irradiance_wm2 ?? null;
-                setSolar(sVal == null ? null : Number(sVal));
+                const rows = normalizeRows(res.data);
+                const last = rows.at(-1);
+                setSolar(last?.solar ?? last?.solar_irradiance_wm2 ?? null);
                 setSolarError(null);
             } catch (e) {
-                if (!alive) return;
                 setSolar(null);
-                setRawSolarLast(null);
                 setSolarError(getErrorMessage(e));
             }
         };
         poll();
-        const id = setInterval(poll, 30_000);
+        const id = setInterval(poll, 1000);
         return () => {
             alive = false;
             clearInterval(id);

@@ -55,7 +55,7 @@
     background: #28a745;
 } /* 에너지 - 초록 */
 .card:nth-child(3)::before {
-    background: #ffc107;
+    background: #70633a;
 } /* 온도 - 노랑 */
 .card:nth-child(4)::before {
     background: #17a2b8;
@@ -85,7 +85,7 @@
     color: #28a745;
 }
 .card:nth-child(3) .value {
-    color: #ffc107;
+    color: #70633a;
 }
 .card:nth-child(4) .value {
     color: #17a2b8;

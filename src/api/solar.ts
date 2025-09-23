@@ -22,7 +22,7 @@ export async function fetchSolarQuery(params: { preset?: string; max_points?: nu
         series: Array.isArray(json?.series) ? json.series : ["solar"],
         data: Array.isArray(json?.data) ? json.data.map((r: any) => ({
             bucket: r.bucket ?? r.time_stamp ?? r.timestamp ?? null,
-            solar: r.solar ?? r.solar_irradiance_wm2 ?? null,
+            solar: r.solar ?? r.solar ?? null,
             device_id: r.device_id ?? null,
         })) : [],
         stats: json?.stats ?? { solar: { avg: null, max: null, min: null, count: 0 } },

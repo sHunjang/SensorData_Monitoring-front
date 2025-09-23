@@ -1,12 +1,4 @@
-/**
- * SolarContainer.tsx
- *
- * 역할:
- * - 일사량 페이지의 데이터 로직을 담당.
- * - device 선택, preset, realtime/range, polling 관리.
- * - fetchSolarQuery 사용, normalizeRows로 bucket 표준화.
- */
-
+// src/pages/Solar/SolarContainer.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SolarPresenter from './SolarPresenter';
 import { fetchSolarQuery } from '@/api/solar';
@@ -16,7 +8,7 @@ import { normalizeRows } from '@/lib/time';
 type Preset = '15m' | '1h' | '1d' | '1w' | '1mo';
 
 export default function SolarContainer() {
-    const [deviceId, setDeviceId] = useState<number | null>(21);
+    const [deviceId, setDeviceId] = useState<number | null>(1); // 기본 1
     const [preset, setPreset] = useState<Preset>('1d');
     const [mode, setMode] = useState<'realtime' | 'range'>('realtime');
 
@@ -27,7 +19,7 @@ export default function SolarContainer() {
     const [logs, setLogs] = useState<string[]>([]);
     const timer = useRef<number | undefined>(undefined);
 
-    const deviceOptions = [21, 22, 23];
+    const deviceOptions = [1]; // 1 고정(필요 시 늘릴 것)
 
     const log = (m: string) => setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${m}`].slice(-300));
 
@@ -52,7 +44,6 @@ export default function SolarContainer() {
             const rows = normalizeRows(raw);
             if (rows.length) {
                 const last = rows[rows.length - 1];
-                // ensure bucket is epoch(ms) and solar is number|null
                 const bucket =
                     typeof last.bucket === 'number'
                         ? last.bucket
@@ -60,14 +51,14 @@ export default function SolarContainer() {
                         ? Date.parse(String(last.bucket))
                         : Date.now();
                 const sVal = last.solar ?? last.solar_irradiance_wm2 ?? null;
-                const solar = sVal == null ? null : typeof sVal === 'number' ? sVal : Number(sVal);
-                const row = { bucket, solar };
+                const solarVal = sVal == null ? null : typeof sVal === 'number' ? sVal : Number(sVal);
+                const row = { bucket, solar: solarVal };
                 setData((prev) => {
                     const next = [...prev.slice(-299), row];
                     recompute(next);
                     return next;
                 });
-                log(`realtime ok device=${deviceId} s=${solar}`);
+                log(`realtime ok device=${deviceId} s=${solarVal}`);
             } else {
                 setData([]);
                 setStats({});
@@ -111,7 +102,7 @@ export default function SolarContainer() {
         window.clearInterval(timer.current);
         if (mode === 'realtime') {
             pullOnce();
-            timer.current = window.setInterval(pullOnce, 5000);
+            timer.current = window.setInterval(pullOnce, 1000);
         }
         return () => window.clearInterval(timer.current);
     }, [mode, pullOnce]);

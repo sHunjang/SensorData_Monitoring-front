@@ -21,8 +21,8 @@ export async function fetchEnvQuery(params: { preset?: string; max_points?: numb
         series: Array.isArray(json?.series) ? json.series : ["temperature", "humidity"],
         data: Array.isArray(json?.data) ? json.data.map((r: any) => ({
             bucket: r.bucket ?? r.time_stamp ?? r.timestamp ?? null,
-            temperature: r.temperature ?? r.temperature_c ?? null,
-            humidity: r.humidity ?? r.humidity_rh ?? null,
+            temperature: r.temperature ?? r.temperature ?? null,
+            humidity: r.humidity ?? r.humidity ?? null,
             device_id: r.device_id ?? null,
         })) : [],
         stats: json?.stats ?? {},

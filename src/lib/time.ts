@@ -1,25 +1,26 @@
-// src/lib/time.ts
-/**
- * 시간 유틸
- * - 서버에서 받은 bucket (ISO string | number | Date)을 epoch ms 숫자로 정규화
- * - 파싱 실패 시 null 반환
- */
-export function toEpochMs(bucket: string | number | Date | null | undefined): number | null {
-    if (bucket == null) return null;
-    if (typeof bucket === "number" && Number.isFinite(bucket)) return bucket;
-    if (bucket instanceof Date && !Number.isNaN(bucket.getTime())) return bucket.getTime();
-    const ms = Date.parse(String(bucket)); // tz-aware ISO 지원
-    return Number.isNaN(ms) ? null : ms;
-}
+// src/lib/time.ts  (또는 기존 normalizeRows 구현을 이걸로 교체)
+export function normalizeRows(raw: any[]): any[] {
+  if (!Array.isArray(raw)) return [];
+  // 보수적으로 정렬(시간 오름차순) 및 bucket을 epoch(ms)로 통일
+  const mapped = raw.map(r => {
+    const bucketRaw = r?.bucket ?? r?.time_stamp ?? r?.time ?? null;
+    let bucketNum: number | null = null;
+    if (bucketRaw == null) {
+      bucketNum = null;
+    } else if (typeof bucketRaw === "number") {
+      // assume epoch ms
+      bucketNum = bucketRaw;
+    } else {
+      // string -> parse (handles "2025-09-23T18:00:10+09:00")
+      const parsed = Date.parse(String(bucketRaw));
+      bucketNum = Number.isNaN(parsed) ? null : parsed;
+    }
+    return { ...r, bucket: bucketNum };
+  });
 
-export function normalizeRows(rawRows: any[], keepNullBucket = false) {
-    // bucket 필드를 epoch ms로 변환 후 정렬. bucket이 없는 행은 제거(옵션에 따라 유지).
-    const rows = rawRows
-        .map((r) => {
-            const epoch = toEpochMs(r.bucket ?? r.time_stamp ?? r.timestamp);
-            return { ...r, bucket: epoch };
-        })
-        .filter((r) => (keepNullBucket ? true : r.bucket != null));
-    rows.sort((a, b) => (a.bucket ?? 0) - (b.bucket ?? 0));
-    return rows;
+  // filter out invalid bucket rows and sort ascending by bucket
+  const valid = mapped.filter(m => m.bucket != null).sort((a, b) => a.bucket - b.bucket);
+  // include also original rows that had null bucket if you want them:
+  const invalid = mapped.filter(m => m.bucket == null);
+  return [...valid, ...invalid];
 }
