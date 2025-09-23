@@ -1,7 +1,12 @@
 /**
  * Error.tsx
- * - 에러 메시지를 박스 형태로 표시
- * - 어떤 에러인지 상세 메시지까지 보여줌
+ *
+ * 목적:
+ * - 카드나 패널 내부에서 사용자에게 에러 메시지를 친절하게 보여주기 위해 사용.
+ *
+ * 동작:
+ * - 단순 박스형 경고.
+ * - 메시지는 pre-wrap으로 여러 줄 출력 가능.
  */
 export default function Error({ msg }: { msg: string }) {
     return (
@@ -16,7 +21,7 @@ export default function Error({ msg }: { msg: string }) {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                whiteSpace: 'pre-wrap', // 줄바꿈 유지
+                whiteSpace: 'pre-wrap',
             }}
         >
             <span style={{ fontWeight: 700 }}>⚠ 에러 발생:</span>

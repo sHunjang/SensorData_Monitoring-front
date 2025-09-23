@@ -1,5 +1,10 @@
-// src/components/common/Tabs.tsx
-/** 상단 탭 네비게이션. 반응형 간격. */
+/**
+ * Tabs.tsx
+ *
+ * 목적:
+ * - 라우팅 탭 네비게이션.
+ * - react-router-dom의 NavLink를 사용하여 활성 탭 스타일링.
+ */
 import { NavLink } from 'react-router-dom';
 export default function Tabs() {
     const tabs = [
@@ -9,13 +14,17 @@ export default function Tabs() {
         { to: '/solar', label: '일사량' },
     ];
     return (
-        <nav className="tabs">
+        <nav className="tabs" style={{ display: 'flex', gap: 12 }}>
             {tabs.map((t) => (
                 <NavLink
                     key={t.to}
                     to={t.to}
                     end
-                    className={({ isActive }) => 'tab' + (isActive ? ' tab--active' : '')}
+                    style={({ isActive }) => ({
+                        padding: '6px 10px',
+                        borderRadius: 8,
+                        background: isActive ? '#eef2ff' : 'transparent',
+                    })}
                 >
                     {t.label}
                 </NavLink>

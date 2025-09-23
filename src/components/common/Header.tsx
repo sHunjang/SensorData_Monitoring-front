@@ -1,5 +1,10 @@
-// src/components/common/Header.tsx
-/** 상단 헤더: 프로젝트 타이틀 + 서브텍스트 */
+/**
+ * Header.tsx
+ *
+ * 목적:
+ * - 앱 상단의 고정 헤더.
+ * - 프로젝트명 및 간단한 서브텍스트 표시.
+ */
 export default function Header() {
     return (
         <header style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', background: '#fff' }}>

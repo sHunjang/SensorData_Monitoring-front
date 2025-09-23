@@ -1,0 +1,31 @@
+/* PeriodControls.module.css
+   - 모드/프리셋/버튼 기본 스타일
+*/
+.controls {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+.row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.input {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+.button {
+    padding: 8px 12px;
+    border: 1px solid #222;
+    border-radius: 10px;
+    background: #111;
+    color: #fff;
+    cursor: pointer;
+}
+.button[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+}

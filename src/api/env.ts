@@ -1,27 +1,29 @@
-import { BASE_URL } from "@/lib/env";
+/**
+ * env API client
+ * - fetchEnvQuery({preset,max_points,start,end})
+ * - 반환: { window,bucket,series,data,stats,error }
+ * - data entries: { bucket: ISOstring, temperature, humidity, device_id? }
+ */
+import { fetchJSON } from "@/lib/http";
 
-export type EnvResp = {
-    window: { start: string; end: string };
-    bucket_seconds: number;
-    limited: boolean;
-    series: string[];
-    data: Array<{ bucket: string; temperature?: number | null; humidity?: number | null }>;
-    stats: Record<string, { avg: number | null; max: number | null; min: number | null; count: number }>;
-};
-
-export async function fetchEnvQuery(params: {
-    preset?: "15m" | "1h" | "1d" | "1w" | "1mo";
-    start?: string;
-    end?: string;
-    maxPoints?: number;
-}): Promise<EnvResp | null> {
-    const { preset = "1d", start, end, maxPoints = 500 } = params;
-    const url = new URL(`${BASE_URL}/data/env/query`);
-    url.searchParams.set("preset", preset);
-    if (start) url.searchParams.set("start", start);
-    if (end) url.searchParams.set("end", end);
-    url.searchParams.set("max_points", String(maxPoints));
-    const r = await fetch(url.toString());
-    if (!r.ok) return null;
-    return r.json();
+export async function fetchEnvQuery(params: { preset?: string; max_points?: number; start?: string; end?: string } = {}) {
+    const q = new URLSearchParams();
+    if (params.preset) q.set("preset", params.preset);
+    if (params.start) q.set("start", params.start);
+    if (params.end) q.set("end", params.end);
+    q.set("max_points", String(params.max_points ?? 500));
+    const json = await fetchJSON<any>(`/data/env/query?${q.toString()}`);
+    return {
+        window: json?.window ?? null,
+        bucket: json?.bucket ?? "1h",
+        series: Array.isArray(json?.series) ? json.series : ["temperature", "humidity"],
+        data: Array.isArray(json?.data) ? json.data.map((r: any) => ({
+            bucket: r.bucket ?? r.time_stamp ?? r.timestamp ?? null,
+            temperature: r.temperature ?? r.temperature_c ?? null,
+            humidity: r.humidity ?? r.humidity_rh ?? null,
+            device_id: r.device_id ?? null,
+        })) : [],
+        stats: json?.stats ?? {},
+        error: json?.error ?? null,
+    };
 }

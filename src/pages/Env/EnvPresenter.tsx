@@ -1,39 +1,63 @@
+/**
+ * EnvPresenter.tsx
+ *
+ * 목적:
+ * - EnvContainer에서 제공하는 상태를 받아 UI로 렌더링.
+ * - 차트, 통계, 로그, 컨트롤을 배치.
+ */
 import styles from './Env.module.css';
 import LineChartWrapper from '@/components/charts/LineChartWrapper';
 import Loading from '@/components/common/Loading';
 import Error from '@/components/common/Error';
+import PeriodControls, { Preset } from '@/components/common/PeriodControls';
+import LogPanel from '@/components/common/LogPanel';
 import StatsPanel from '@/components/metrics/StatsPanel';
-import { SERIES_LABELS } from '@/constants/labels';
+import SummaryText from '@/components/metrics/SummaryText';
 
-type Props = {
-    preset: '15m' | '1h' | '1d' | '1w' | '1mo';
-    setPreset: (p: any) => void;
+export default function EnvPresenter(p: {
+    mode: 'realtime' | 'range';
+    setMode: (m: 'realtime' | 'range') => void;
+    preset: Preset;
+    setPreset: (p: Preset) => void;
+    onQuery: () => void;
     data: any[];
     stats: any;
     loading: boolean;
     error: string | null;
-    onQuery: () => void;
-};
+    logs: string[];
+}) {
+    const { mode, setMode, preset, setPreset, onQuery, data, stats, loading, error, logs } = p;
+    const last = data?.length ? data[data.length - 1] : null;
 
-export default function EnvPresenter({ preset, setPreset, data, stats, loading, error, onQuery }: Props) {
     return (
         <div className={styles.container}>
-            <div className={styles.controls}>
-                <label>
-                    Interval
-                    <select value={preset} onChange={(e) => setPreset(e.target.value)} className={styles.input}>
-                        <option value="15m">15분</option>
-                        <option value="1h">1시간</option>
-                        <option value="1d">1일</option>
-                        <option value="1w">1주</option>
-                        <option value="1mo">1달</option>
-                    </select>
-                </label>
-
-                <button onClick={onQuery} className={styles.button} disabled={loading}>
-                    {loading ? '조회 중...' : '그래프 조회'}
-                </button>
+            <div className={styles.card}>
+                <div style={{ display: 'grid', gap: 6 }}>
+                    <SummaryText
+                        title="온도"
+                        unit="°C"
+                        mode={mode}
+                        realtimeValue={last?.temperature ?? null}
+                        stats={stats?.temperature}
+                    />
+                    <SummaryText
+                        title="습도"
+                        unit="%"
+                        mode={mode}
+                        realtimeValue={last?.humidity ?? null}
+                        stats={stats?.humidity}
+                    />
+                </div>
             </div>
+
+            <PeriodControls
+                mode={mode}
+                setMode={setMode}
+                preset={preset}
+                setPreset={setPreset}
+                onQuery={onQuery}
+                loading={loading}
+            />
 
             <div className={styles.card} style={{ height: 360 }}>
                 {loading ? (
@@ -41,13 +65,20 @@ export default function EnvPresenter({ preset, setPreset, data, stats, loading, 
                 ) : error ? (
                     <Error msg={error} />
                 ) : (
-                    <LineChartWrapper data={data} keys={['temperature', 'humidity']} labels={SERIES_LABELS} />
+                    <LineChartWrapper
+                        data={data}
+                        keys={['temperature', 'humidity']}
+                        labels={{ temperature: '온도(°C)', humidity: '습도(%)' }}
+                    />
                 )}
             </div>
 
             <div className={styles.card}>
-                <h3 className={styles.section}>요약 통계</h3>
-                <StatsPanel stats={stats} labels={SERIES_LABELS} />
+                <StatsPanel title="요약 통계" stats={stats ?? {}} />
+            </div>
+
+            <div className={styles.card}>
+                <LogPanel logs={logs} />
             </div>
         </div>
     );

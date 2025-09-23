@@ -1,33 +1,45 @@
 /**
- * StatsPanel
- * - stats 객체에 있는 모든 시리즈를 자동으로 표시
- * - labels 에 매핑이 있으면 라벨로, 없으면 키 이름 그대로 사용
+ * StatsPanel.tsx
+ *
+ * 목적:
+ * - 통계 객체(평균/최대/최소/개수)를 여럿 렌더링.
+ *
+ * props:
+ * - title: string
+ * - stats: Record<string, {avg,max,min,count}>
+ *
+ * 동작:
+ * - stats가 비어있으면 '데이터 없음' 표시.
  */
 import styles from './StatsPanel.module.css';
 
-type Stat = {
-    avg: number | null;
-    max: number | null;
-    min: number | null;
-    count: number;
-};
+type Stat = { avg: number | null; max: number | null; min: number | null; count: number };
+type Props = { title: string; stats: Record<string, Stat> };
 
-export default function StatsPanel({ stats, labels }: { stats: Record<string, Stat>; labels: Record<string, string> }) {
-    const fmt = (v: number | null) => (v === null || v === undefined || isNaN(v) ? '-' : v.toFixed(2));
+const fmt = (n: number | null | undefined, d = 2) => (typeof n === 'number' && Number.isFinite(n) ? n.toFixed(d) : '—');
 
+export default function StatsPanel({ title, stats }: Props) {
+    const entries = Object.entries(stats ?? {});
     return (
-        <div className={styles.grid}>
-            {Object.entries(stats).map(([key, s]) => (
-                <div key={key} className={styles.item}>
-                    <h4 className={styles.label}>{labels[key] ?? key}</h4>
-                    <div className={styles.values}>
-                        <span>평균: {fmt(s.avg)}</span>
-                        <span>최대: {fmt(s.max)}</span>
-                        <span>최소: {fmt(s.min)}</span>
-                        <span>개수: {s.count}</span>
-                    </div>
+        <section>
+            <h4 style={{ margin: '0 0 8px 0' }}>{title}</h4>
+            {entries.length === 0 ? (
+                <p>데이터 없음</p>
+            ) : (
+                <div className={styles.grid}>
+                    {entries.map(([k, s]) => (
+                        <div key={k} className={styles.item}>
+                            <div className={styles.label}>{k}</div>
+                            <div className={styles.values}>
+                                <div>평균: {fmt(s?.avg)}</div>
+                                <div>최고: {fmt(s?.max)}</div>
+                                <div>최저: {fmt(s?.min)}</div>
+                                <div>개수: {s?.count ?? 0}</div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
-            ))}
-        </div>
+            )}
+        </section>
     );
 }

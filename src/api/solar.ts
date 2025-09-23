@@ -1,27 +1,27 @@
-import { BASE_URL } from "@/lib/env";
+/**
+ * solar API client
+ * - fetchSolarQuery({preset,max_points,start,end})
+ * - data entries: { bucket, solar, device_id? }
+ */
+import { fetchJSON } from "@/lib/http";
 
-export type SolarResp = {
-    window: { start: string; end: string };
-    bucket_seconds: number;
-    limited: boolean;
-    series: ["solar"];
-    data: Array<{ bucket: string; solar?: number | null }>;
-    stats: { solar: { avg: number | null; max: number | null; min: number | null; count: number } };
-};
-
-export async function fetchSolarQuery(params: {
-    preset?: "15m" | "1h" | "1d" | "1w" | "1mo";
-    start?: string;
-    end?: string;
-    maxPoints?: number;
-}): Promise<SolarResp | null> {
-    const { preset = "1d", start, end, maxPoints = 500 } = params;
-    const url = new URL(`${BASE_URL}/data/solar/query`);
-    url.searchParams.set("preset", preset);
-    if (start) url.searchParams.set("start", start);
-    if (end) url.searchParams.set("end", end);
-    url.searchParams.set("max_points", String(maxPoints));
-    const r = await fetch(url.toString());
-    if (!r.ok) return null;
-    return r.json();
+export async function fetchSolarQuery(params: { preset?: string; max_points?: number; start?: string; end?: string } = {}) {
+    const q = new URLSearchParams();
+    if (params.preset) q.set("preset", params.preset);
+    if (params.start) q.set("start", params.start);
+    if (params.end) q.set("end", params.end);
+    q.set("max_points", String(params.max_points ?? 500));
+    const json = await fetchJSON<any>(`/data/solar/query?${q.toString()}`);
+    return {
+        window: json?.window ?? null,
+        bucket: json?.bucket ?? "1h",
+        series: Array.isArray(json?.series) ? json.series : ["solar"],
+        data: Array.isArray(json?.data) ? json.data.map((r: any) => ({
+            bucket: r.bucket ?? r.time_stamp ?? r.timestamp ?? null,
+            solar: r.solar ?? r.solar_irradiance_wm2 ?? null,
+            device_id: r.device_id ?? null,
+        })) : [],
+        stats: json?.stats ?? { solar: { avg: null, max: null, min: null, count: 0 } },
+        error: json?.error ?? null,
+    };
 }

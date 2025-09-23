@@ -1,39 +1,77 @@
+/**
+ * ModbusPresenter.tsx
+ *
+ * 목적:
+ * - ModbusContainer에서 제공하는 상태를 바탕으로 UI 구성(컨트롤/차트/통계/로그)
+ *
+ * 주의:
+ * - column 키 이름은 백엔드에서 반환하는 필드와 일치해야 함.
+ */
 import styles from '../Env/Env.module.css';
 import LineChartWrapper from '@/components/charts/LineChartWrapper';
-import Loading from '@/components/common/Loading';
 import Error from '@/components/common/Error';
+import PeriodControls from '@/components/common/PeriodControls';
+import LogPanel from '@/components/common/LogPanel';
 import StatsPanel from '@/components/metrics/StatsPanel';
-import { SERIES_LABELS } from '@/constants/labels';
+import SummaryText from '@/components/metrics/SummaryText';
 
-type Props = {
+type SeriesKey = 'power' | 'current' | 'voltage' | 'energy' | 'pf';
+
+export default function ModbusPresenter(p: {
     deviceId: number;
-    setDeviceId: (id: number) => void;
-    column: string;
-    setColumn: (s: string) => void;
-    preset: '15m' | '1h' | '1d' | '1w' | '1mo';
+    setDeviceId: (n: number) => void;
+    column: SeriesKey;
+    setColumn: (s: SeriesKey) => void;
+    preset: any;
     setPreset: (p: any) => void;
+    mode: 'realtime' | 'range';
+    setMode: (m: 'realtime' | 'range') => void;
     onQuery: () => void;
     data: any[];
     stats: any;
     loading: boolean;
     error: string | null;
-};
+    logs: string[];
+}) {
+    const {
+        deviceId,
+        setDeviceId,
+        column,
+        setColumn,
+        preset,
+        setPreset,
+        mode,
+        setMode,
+        onQuery,
+        data,
+        stats,
+        error,
+        logs,
+    } = p;
+    const lastVal = data?.length ? data[data.length - 1]?.[column] ?? null : null;
+    const unit =
+        column === 'energy'
+            ? 'kWh'
+            : column === 'power'
+            ? 'kW'
+            : column === 'current'
+            ? 'A'
+            : column === 'voltage'
+            ? 'V'
+            : '';
 
-export default function ModbusPresenter({
-    deviceId,
-    setDeviceId,
-    column,
-    setColumn,
-    preset,
-    setPreset,
-    onQuery,
-    data,
-    stats,
-    loading,
-    error,
-}: Props) {
     return (
         <div className={styles.container}>
+            <div className={styles.card}>
+                <SummaryText
+                    title={`모드버스 · ${column}`}
+                    unit={unit}
+                    mode={mode}
+                    realtimeValue={lastVal}
+                    stats={stats?.[column]}
+                />
+            </div>
+
             <div className={styles.controls}>
                 <label>
                     장치 ID
@@ -47,43 +85,44 @@ export default function ModbusPresenter({
 
                 <label>
                     데이터
-                    <select value={column} onChange={(e) => setColumn(e.target.value)} className={styles.input}>
-                        <option value="power">전력 (kW)</option>
-                        <option value="current">전류 (A)</option>
-                        <option value="voltage">전압 (V)</option>
-                        <option value="energy">전력량 (kWh)</option>
+                    <select
+                        value={column}
+                        onChange={(e) => setColumn(e.target.value as SeriesKey)}
+                        className={styles.input}
+                    >
+                        <option value="power">전력(kW)</option>
+                        <option value="current">전류(A)</option>
+                        <option value="voltage">전압(V)</option>
+                        <option value="energy">전력량(kWh)</option>
+                        <option value="pf">역률</option>
                     </select>
                 </label>
 
-                <label>
-                    Interval
-                    <select value={preset} onChange={(e) => setPreset(e.target.value)} className={styles.input}>
-                        <option value="15m">15분</option>
-                        <option value="1h">1시간</option>
-                        <option value="1d">1일</option>
-                        <option value="1w">1주</option>
-                        <option value="1mo">1달</option>
-                    </select>
-                </label>
-
-                <button onClick={onQuery} className={styles.button} disabled={loading}>
-                    {loading ? '조회 중...' : '그래프 조회'}
-                </button>
+                <PeriodControls
+                    mode={mode}
+                    setMode={setMode}
+                    preset={preset}
+                    setPreset={setPreset}
+                    onQuery={onQuery}
+                    loading={false}
+                />
             </div>
 
             <div className={styles.card} style={{ height: 360 }}>
-                {loading ? (
-                    <Loading />
-                ) : error ? (
+                {error ? (
                     <Error msg={error} />
                 ) : (
-                    <LineChartWrapper data={data} keys={[column]} labels={SERIES_LABELS} />
+                    <LineChartWrapper data={data} keys={[column]} labels={{ [column]: column }} />
                 )}
             </div>
 
             <div className={styles.card}>
                 <h3 className={styles.section}>요약 통계</h3>
-                <StatsPanel stats={stats} labels={SERIES_LABELS} />
+                <StatsPanel title="요약 통계" stats={stats ?? {}} />
+            </div>
+
+            <div className={styles.card}>
+                <LogPanel logs={logs} />
             </div>
         </div>
     );

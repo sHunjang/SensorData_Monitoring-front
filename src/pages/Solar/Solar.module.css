@@ -1,4 +1,6 @@
-/* src/pages/Solar/Solar.module.css */
+/* Solar.module.css
+   - Solar 페이지 전용 스타일
+*/
 .container {
     padding: 16px;
     display: grid;
