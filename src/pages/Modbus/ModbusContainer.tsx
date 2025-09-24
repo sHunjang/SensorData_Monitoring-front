@@ -1,33 +1,29 @@
+// src/pages/Modbus/ModbusContainer.tsx
 /**
- * ModbusContainer.tsx
+ * ModbusContainer
  *
- * 역할:
- * - Modbus(전력량계) 페이지의 데이터 로직을 담당.
- * - realtime / range 모드, device/series 선택, preset 관리.
- * - API 호출(fetchModbusQuery, fetchRealtime), 응답 방어적 파싱, normalizeRows 사용.
+ * - EnvContainer와 동일한 패턴으로 구현.
+ * - mode: 'realtime' (폴링으로 최신 데이터 병합) / 'range' (기간 조회)
+ * - fetchModbusQuery()를 사용해 rows를 받아 normalizeRows()로 통일된 형태로 변환.
+ * - stats 계산은 프레젠터에도 전달하지만 LineChartWrapper가 자체 레이블/키로 렌더링 가능하도록 data[] 보존.
  *
- * 주의:
- * - fetchModbusQuery, fetchRealtime이 src/api/modbus 에 있어야 함.
- * - normalizeRows는 bucket -> epoch(ms) 변환을 보장해야 함.
+ * 사용:
+ * - Presenter는 기존 인터페이스(데이터, stats, loading, error, logs, deviceId setters)를 그대로 받음.
  */
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ModbusPresenter from './ModbusPresenter';
-import { fetchModbusQuery, fetchRealtime } from '@/api/modbus';
+import { fetchModbusQuery } from '@/api/modbus';
 import { getErrorMessage } from '@/lib/http';
 import { normalizeRows } from '@/lib/time';
 
+/* Preset type 공통 */
 type Preset = '15m' | '1h' | '1d' | '1w' | '1mo';
-type SeriesKey = 'power' | 'current' | 'voltage' | 'energy' | 'pf';
 
 export default function ModbusContainer() {
-    // UI state
-    const [deviceId, setDeviceId] = useState<number>(11);
-    const [column, setColumn] = useState<SeriesKey>('power');
-    const [preset, setPreset] = useState<Preset>('1d');
+    const [preset, setPreset] = useState<Preset>('15m');
     const [mode, setMode] = useState<'realtime' | 'range'>('realtime');
 
-    // data state
+    const [deviceId, setDeviceId] = useState<number>(11); // 기본 장치
     const [data, setData] = useState<any[]>([]);
     const [stats, setStats] = useState<any>({});
     const [loading, setLoading] = useState(false);
@@ -35,100 +31,74 @@ export default function ModbusContainer() {
     const [logs, setLogs] = useState<string[]>([]);
     const timer = useRef<number | undefined>(undefined);
 
-    const deviceOptions = [11, 12, 13]; // 필요 시 실제 장치 목록으로 교체
-
     const log = (m: string) => setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${m}`].slice(-300));
 
-    // 간단 통계 계산 (avg/max/min/count)
-    const recompute = useCallback(
-        (rows: any[]) => {
-            const vals = rows.map((r) => r[column]).filter((v): v is number => v != null && Number.isFinite(v));
-            if (!vals.length) {
-                setStats({});
-                return;
-            }
-            const sum = vals.reduce((a, b) => a + b, 0);
-            setStats({
-                [column]: {
-                    avg: +(sum / vals.length).toFixed(3),
-                    max: Math.max(...vals),
-                    min: Math.min(...vals),
-                    count: vals.length,
-                },
-            });
-        },
-        [column]
-    );
+    // 간단 stats 재계산 (Presenter/StatsPanel 용)
+    const recompute = (rows: any[]) => {
+        const power = rows
+            .map((r) => r.total_active_power_kw)
+            .filter((v): v is number => v != null && Number.isFinite(v));
+        const energy = rows
+            .map((r) => r.total_active_energy_kwh)
+            .filter((v): v is number => v != null && Number.isFinite(v));
+        const calc = (arr: number[]) =>
+            arr.length
+                ? {
+                      avg: +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(3),
+                      max: Math.max(...arr),
+                      min: Math.min(...arr),
+                      count: arr.length,
+                  }
+                : { avg: null, max: null, min: null, count: 0 };
 
-    // realtime: fetchRealtime returns an object with time_stamp and metrics (defensive)
+        setStats({ power: calc(power), energy: calc(energy) });
+    };
+
+    // realtime 모드: 최신 rows를 주기적으로 가져와 기존 data에 이어붙임
     const pullOnce = useCallback(async () => {
+        setLoading(true);
         try {
-            const r = await fetchRealtime(deviceId);
-            if (!r) throw new Error('empty realtime response');
-
-            // metrics parsing (defensive)
-            const metricMap: Record<string, any> = r.metrics ?? {};
-            const metricKey = column === 'power' ? 'p_kw' : column === 'energy' ? 'e_kwh' : column;
-            let rawVal = metricMap[metricKey] ?? metricMap[column] ?? null;
-            const value = rawVal == null ? null : typeof rawVal === 'number' ? rawVal : Number(rawVal);
-
-            // bucket: try time_stamp then fallback to Date.now()
-            const raw = r as any; // 넘어오는 응답이 다양한 스키마일 수 있으므로 방어적으로 처리
-            const tsCandidate = raw?.time_stamp ?? raw?.timestamp ?? raw?.time ?? null;
-
-            let bucket: number;
-            if (tsCandidate == null) {
-                bucket = Date.now();
-            } else if (typeof tsCandidate === 'number') {
-                // already epoch ms or seconds? assume ms; if seconds, adjust where you create timestamps on server
-                bucket = tsCandidate;
-            } else if (typeof tsCandidate === 'string') {
-                // ISO string with offset -> Date.parse가 잘 처리함
-                bucket = Number.isNaN(Date.parse(tsCandidate)) ? Date.now() : Date.parse(tsCandidate);
-            } else if (tsCandidate instanceof Date) {
-                bucket = tsCandidate.getTime();
+            // preset 15m, 적당한 max_points (300)
+            const res = await fetchModbusQuery({ device_id: deviceId, preset: '15m', max_points: 300 });
+            // normalizeRows: ISO bucket -> epoch(ms) 등 LineChartWrapper가 기대하는 형식으로 변환
+            const rows = normalizeRows(res.data ?? []);
+            if (rows.length) {
+                setData((prev) => {
+                    // keep history small: 마지막 1000 포인트만 유지
+                    const next = [...prev.slice(-700), ...rows].slice(-1000);
+                    recompute(next);
+                    return next;
+                });
+                log(
+                    `realtime ok device=${deviceId} lastP=${rows.at(-1)?.total_active_power_kw} lastE=${
+                        rows.at(-1)?.total_active_energy_kwh
+                    }`
+                );
             } else {
-                bucket = Date.now();
+                // 빈 데이터여도 상태 갱신
+                setData([]);
+                setStats({});
+                log(`realtime empty device=${deviceId}`);
             }
-
-            const row = { bucket, [column]: value };
-
-            setData((prev) => {
-                const next = [...prev.slice(-299), row];
-                recompute(next);
-                return next;
-            });
-
             setError(null);
-            log(`realtime ok device=${deviceId} col=${column} v=${value}`);
         } catch (e) {
             const msg = getErrorMessage(e);
             setError(msg);
             log(`realtime error ${msg}`);
+        } finally {
+            setLoading(false);
         }
-    }, [deviceId, column, recompute]);
+    }, [deviceId]);
 
-    // range query: fetchModbusQuery -> normalizeRows -> ensure column key exists
+    // range 모드: 사용자가 기간조회(PeriodControls에서 onQuery 호출)
     const queryRange = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await fetchModbusQuery({ device_id: deviceId, series: [column], preset, max_points: 1000 });
-            const raw = Array.isArray(res.data) ? res.data : [];
-            const rows = normalizeRows(raw); // normalizeRows should convert bucket -> epoch(ms)
-            const norm = rows.map((r: any) => {
-                // fallback keys mapping: requested column or metric-key-like names
-                const candidate =
-                    r[column] ??
-                    r.p_kw ??
-                    r.e_kwh ??
-                    r[Object.keys(r).find((k) => k.includes(column)) as string] ??
-                    null;
-                const v = candidate == null ? null : typeof candidate === 'number' ? candidate : Number(candidate);
-                return { ...r, [column]: v };
-            });
-            setData(norm);
-            recompute(norm);
-            log(`range ok device=${deviceId} preset=${preset} n=${norm.length}`);
+            const res = await fetchModbusQuery({ device_id: deviceId, preset, max_points: 2000 });
+            const rows = normalizeRows(res.data ?? []);
+            setData(rows);
+            recompute(rows);
+            log(`range ok device=${deviceId} n=${rows.length}`);
             setError(null);
         } catch (e) {
             const msg = getErrorMessage(e);
@@ -139,14 +109,15 @@ export default function ModbusContainer() {
         } finally {
             setLoading(false);
         }
-    }, [deviceId, column, preset, recompute]);
+    }, [preset, deviceId]);
 
-    // polling management
+    // 모드에 따라 폴링 시작/중지
     useEffect(() => {
         window.clearInterval(timer.current);
         if (mode === 'realtime') {
             pullOnce();
-            timer.current = window.setInterval(pullOnce, 5000);
+            // Env와 동일하게 500ms 폴링 (환경에 따라 늘려도 됨)
+            timer.current = window.setInterval(pullOnce, 500);
         }
         return () => window.clearInterval(timer.current);
     }, [mode, pullOnce]);
@@ -154,10 +125,10 @@ export default function ModbusContainer() {
     return (
         <ModbusPresenter
             deviceId={deviceId}
-            setDeviceId={setDeviceId}
-            deviceOptions={deviceOptions}
-            column={column}
-            setColumn={setColumn}
+            setDeviceId={(id) => setDeviceId(id)}
+            deviceOptions={[11, 12, 13]} /* 실제 목록으로 바꾸세요 */
+            column={'power'}
+            setColumn={() => {}}
             preset={preset}
             setPreset={setPreset}
             mode={mode}
