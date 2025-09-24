@@ -111,7 +111,13 @@ export default function EnvPresenter(p: {
                 <LineChartWrapper
                     data={data}
                     keys={['temperature', 'humidity']}
-                    labels={{ temperature: '온도(°C)', humidity: '습도(%)' }}
+                    labels={{ temperature: '온도 (°C)', humidity: '습도 (%)' }}
+                    xKey="bucket"
+                    csvExport={{
+                        apiPath: '/data/env/query',
+                        extraParams: { device_id: deviceId ?? undefined },
+                        filePrefix: 'env',
+                    }}
                 />
             </div>
 

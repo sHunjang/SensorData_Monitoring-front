@@ -9,6 +9,7 @@
  */
 import React from 'react';
 import styles from './Solar.module.css';
+
 import LineChartWrapper from '@/components/charts/LineChartWrapper';
 import Loading from '@/components/common/Loading';
 import Error from '@/components/common/Error';
@@ -98,7 +99,6 @@ export default function SolarPresenter({
                             loading={loading}
                         />
                     </div>
-
                 </div>
             </div>
 
@@ -107,7 +107,17 @@ export default function SolarPresenter({
                 {error ? (
                     <Error msg={error} />
                 ) : (
-                    <LineChartWrapper data={data} keys={['solar']} labels={{ solar: '일사량 (W/m²)' }} xKey="bucket" />
+                    <LineChartWrapper
+                        data={data}
+                        keys={['solar']}
+                        labels={{ solar: '일사량 (W/m²)' }}
+                        xKey="bucket"
+                        csvExport={{
+                            apiPath: '/data/solar/query',
+                            extraParams: { device_id: deviceId ?? undefined },
+                            filePrefix: 'solar',
+                        }}
+                    />
                 )}
             </div>
 

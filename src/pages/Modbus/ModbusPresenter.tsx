@@ -120,7 +120,17 @@ export default function ModbusPresenter({
                 ) : error ? (
                     <Error msg={error} />
                 ) : (
-                    <LineChartWrapper data={data} keys={[column]} labels={{ [column]: column }} xKey="bucket" />
+                    <LineChartWrapper
+                        data={data}
+                        keys={['total_active_power_kw', 'total_active_energy_kwh']} // 페이지에 맞는 키
+                        labels={{ total_active_power_kw: '전력 (kW)', total_active_energy_kwh: '에너지 (kWh)' }}
+                        xKey="bucket"
+                        csvExport={{
+                            apiPath: '/data/modbus/query',
+                            extraParams: { device_id: deviceId ?? undefined }, // 필수라면 선택자에서 전달
+                            filePrefix: 'modbus',
+                        }}
+                    />
                 )}
             </div>
 
