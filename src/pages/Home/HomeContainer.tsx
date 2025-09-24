@@ -1,6 +1,5 @@
 // src/pages/Home/HomeContainer.tsx
 /**
- * HomeContainer (수정본)
  *
  * 목적:
  * - 실시간 전력, 당일 누적(kWh), 온습도 최신, 일사량 최신을 폴링해서 Presenter에 전달.
@@ -83,60 +82,60 @@ export default function HomeContainer() {
     const [envError, setEnvError] = useState<string | null>(null);
     const [solarError, setSolarError] = useState<string | null>(null);
 
-    // --------------------------
-    // 실시간 전력 (5초 폴링)
-    // --------------------------
-    useEffect(() => {
-        let alive = true;
-        const poll = async () => {
-            try {
-                const r = await fetchModbusRealtime(11);
-                if (!alive) return;
-                setRawModbus(r ?? null);
-                // 방어적 추출: metrics 내부 또는 최상위에서 후보 키 순회
-                const p = extractFromRealtime(r, POWER_CANDIDATES);
-                setPower(p === null ? null : Number(p));
-                setPowerError(null);
-            } catch (e) {
-                if (!alive) return;
-                setPower(null);
-                setRawModbus(null);
-                setPowerError(getErrorMessage(e));
-            }
-        };
-        poll();
-        const id = setInterval(poll, 1000);
-        return () => {
-            alive = false;
-            clearInterval(id);
-        };
-    }, []);
+    // // --------------------------
+    // // 실시간 전력 (5초 폴링)
+    // // --------------------------
+    // useEffect(() => {
+    //     let alive = true;
+    //     const poll = async () => {
+    //         try {
+    //             const r = await fetchModbusRealtime(11);
+    //             if (!alive) return;
+    //             setRawModbus(r ?? null);
+    //             // 방어적 추출: metrics 내부 또는 최상위에서 후보 키 순회
+    //             const p = extractFromRealtime(r, POWER_CANDIDATES);
+    //             setPower(p === null ? null : Number(p));
+    //             setPowerError(null);
+    //         } catch (e) {
+    //             if (!alive) return;
+    //             setPower(null);
+    //             setRawModbus(null);
+    //             setPowerError(getErrorMessage(e));
+    //         }
+    //     };
+    //     poll();
+    //     const id = setInterval(poll, 1000);
+    //     return () => {
+    //         alive = false;
+    //         clearInterval(id);
+    //     };
+    // }, []);
 
-    // --------------------------
-    // 당일 전력량 (60초 폴링)
-    // --------------------------
-    useEffect(() => {
-        let alive = true;
-        const load = async () => {
-            try {
-                const r = await fetchTodayEnergy(11);
-                if (!alive) return;
-                const kwh = r?.kwh ?? null;
-                setTodayKwh(kwh == null ? null : Number(kwh));
-                setTodayError(null);
-            } catch (e) {
-                if (!alive) return;
-                setTodayKwh(null);
-                setTodayError(getErrorMessage(e));
-            }
-        };
-        load();
-        const id = setInterval(load, 1000);
-        return () => {
-            alive = false;
-            clearInterval(id);
-        };
-    }, []);
+    // // --------------------------
+    // // 당일 전력량 (60초 폴링)
+    // // --------------------------
+    // useEffect(() => {
+    //     let alive = true;
+    //     const load = async () => {
+    //         try {
+    //             const r = await fetchTodayEnergy(11);
+    //             if (!alive) return;
+    //             const kwh = r?.kwh ?? null;
+    //             setTodayKwh(kwh == null ? null : Number(kwh));
+    //             setTodayError(null);
+    //         } catch (e) {
+    //             if (!alive) return;
+    //             setTodayKwh(null);
+    //             setTodayError(getErrorMessage(e));
+    //         }
+    //     };
+    //     load();
+    //     const id = setInterval(load, 1000);
+    //     return () => {
+    //         alive = false;
+    //         clearInterval(id);
+    //     };
+    // }, []);
 
     // --------------------------
     // 온/습도 최신 1건 (30초 폴링)
@@ -182,7 +181,7 @@ export default function HomeContainer() {
         const poll = async () => {
             try {
                 // device_id=1 명시 추가
-                const res = await fetchSolarQuery({ preset: '15m', max_points: 1, device_id: 1 });
+                const res = await fetchSolarQuery({ preset: '15m', max_points: 1, device_id: undefined });
                 if (!alive) return;
                 const rows = normalizeRows(res.data);
                 const last = rows.at(-1);

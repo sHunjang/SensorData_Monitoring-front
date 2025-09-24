@@ -1,21 +1,13 @@
+// src/components/charts/LineChartWrapper.tsx
 /**
- * LineChartWrapper.tsx
+ * LineChartWrapper
  *
- * 목적:
- * - Recharts 기반 범용 라인 차트 래퍼.
- * - 서버에서 받은 시계열 데이터를 안전하게 렌더링.
+ * - Recharts 기반 범용 라인 차트 래퍼
+ * - X축은 epoch(ms) 숫자 타입을 기대함 (type="number", scale="time")
+ * - 툴팁/틱 포맷은 KST(Asia/Seoul)로 포맷
  *
- * 동작 요약:
- * - data: { bucket: string|number|Date, <series keys>: number|null, ... }[]
- * - keys: 렌더링할 시리즈 키 목록.
- * - labels: 시리즈 레이블 매핑.
- * - xKey: X축 필드명 (기본 'bucket').
- * - X축 값은 Date로 파싱 가능하면 HH:MM 형태로 표시. 실패 시 원값 문자열로 표시.
- *
- * 주의:
- * - 서버와 클라이언트의 타임존 불일치가 있으면 시간 표시가 어긋남.
- * - 시간 문제를 완전히 해결하려면 서버에서 tz-aware ISO(예: 2025-09-23T12:00:00+09:00)를 보내도록 하거나
- *   클라이언트에서 명시적으로 UTC→KST 변환 로직을 적용해야 함.
+ * 중요:
+ * - data[].bucket 이 숫자(epoch ms)여야 정상 동작.
  */
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ResponsiveContainer } from 'recharts';
@@ -23,15 +15,14 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Responsi
 type Props = {
     data: any[];
     keys: string[];
-    labels: Record<string, string>;
+    labels?: Record<string, string>;
     xKey?: string;
 };
 
-function fmt(ts?: string | number | Date) {
-    if (ts == null) return '';
-    const d = ts instanceof Date ? ts : new Date(ts);
-    if (Number.isNaN(d.getTime())) return String(ts);
-    // KST로 고정 포맷
+function fmtTimeKst(epochMs?: number | null) {
+    if (epochMs == null) return '';
+    const d = new Date(Number(epochMs));
+    if (Number.isNaN(d.getTime())) return '';
     return new Intl.DateTimeFormat('ko-KR', {
         hour: '2-digit',
         minute: '2-digit',
@@ -40,9 +31,10 @@ function fmt(ts?: string | number | Date) {
     }).format(d);
 }
 
-export default function LineChartWrapper({ data, keys, labels, xKey = 'bucket' }: Props) {
-    if (!data?.length)
+export default function LineChartWrapper({ data, keys, labels = {}, xKey = 'bucket' }: Props) {
+    if (!data || !data.length) {
         return <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#888' }}>데이터 없음</div>;
+    }
 
     return (
         <ResponsiveContainer width="100%" height="100%">
@@ -51,24 +43,15 @@ export default function LineChartWrapper({ data, keys, labels, xKey = 'bucket' }
                 <XAxis
                     dataKey={xKey}
                     type="number"
-                    domain={['auto', 'auto']}
+                    domain={['dataMin', 'dataMax']}
                     scale="time"
-                    tickFormatter={(ts) => {
-                        if (!ts) return '';
-                        const d = new Date(Number(ts));
-                        return new Intl.DateTimeFormat('ko-KR', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            timeZone: 'Asia/Seoul',
-                            hour12: false,
-                        }).format(d);
-                    }}
+                    tickFormatter={(ts) => fmtTimeKst(ts as number)}
                     minTickGap={24}
                 />
                 <YAxis allowDecimals />
                 <Tooltip
                     labelFormatter={(v) => {
-                        if (!v) return '';
+                        if (v == null) return '';
                         const d = new Date(Number(v));
                         return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
                     }}

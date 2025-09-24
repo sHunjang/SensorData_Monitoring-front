@@ -49,8 +49,8 @@ export default function PeriodControls(props: {
                 </label>
             )}
 
-            <button onClick={onQuery} className={styles.button} disabled={loading}>
-                {loading ? '조회 중...' : mode === 'realtime' ? '즉시 새로고침' : '기간 조회'}
+            <button onClick={onQuery} className={styles.button}>
+                {mode === 'realtime' ? '즉시 새로고침' : '기간 조회'}
             </button>
         </div>
     );

@@ -111,12 +111,6 @@ export default function ModbusPresenter({
                             loading={loading}
                         />
                     </div>
-
-                    <div className="row">
-                        <button onClick={() => onQuery()} disabled={loading}>
-                            Refresh
-                        </button>
-                    </div>
                 </div>
             </div>
 

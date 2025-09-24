@@ -35,11 +35,7 @@ export default function EnvPresenter(p: {
     deviceId?: number | null;
     setDeviceId?: (id: number | null) => void;
 }) {
-    const {
-        mode, setMode, preset, setPreset, onQuery,
-        data, stats, loading, error, logs,
-        deviceId, setDeviceId
-    } = p;
+    const { mode, setMode, preset, setPreset, onQuery, data, stats, loading, error, logs, deviceId, setDeviceId } = p;
 
     // 기본 장치 목록. 필요시 컨테이너 또는 서버에서 동적으로 공급하도록 변경 가능.
     const deviceOptions = [21, 22, 23];
@@ -52,7 +48,11 @@ export default function EnvPresenter(p: {
         const id = v === '' ? null : Number(v);
         setDeviceId(id);
         // 선택 즉시 데이터 갱신 요청
-        try { onQuery(); } catch { /* onQuery may be sync/async; ignore errors here */ }
+        try {
+            onQuery();
+        } catch {
+            /* onQuery may be sync/async; ignore errors here */
+        }
     };
 
     return (
@@ -94,33 +94,25 @@ export default function EnvPresenter(p: {
                             onChange={(e) => handleDeviceChange(e.target.value)}
                             style={{ padding: '4px 8px' }}
                         >
-                            <option value=''>All</option>
+                            <option value="">All</option>
                             {deviceOptions.map((id) => (
-                                <option key={id} value={id}>{id}</option>
+                                <option key={id} value={id}>
+                                    {id}
+                                </option>
                             ))}
                         </select>
                     ) : (
                         <div style={{ paddingLeft: 8 }}>{deviceId ?? 'All'}</div>
                     )}
                 </div>
-
-                <div style={{ marginLeft: 'auto' }}>
-                    <button onClick={() => onQuery()} disabled={loading}>Refresh</button>
-                </div>
             </div>
 
             <div className={styles.card} style={{ height: 360 }}>
-                {loading ? (
-                    <Loading />
-                ) : error ? (
-                    <Error msg={error} />
-                ) : (
-                    <LineChartWrapper
-                        data={data}
-                        keys={['temperature', 'humidity']}
-                        labels={{ temperature: '온도(°C)', humidity: '습도(%)' }}
-                    />
-                )}
+                <LineChartWrapper
+                    data={data}
+                    keys={['temperature', 'humidity']}
+                    labels={{ temperature: '온도(°C)', humidity: '습도(%)' }}
+                />
             </div>
 
             <div className={styles.card}>

@@ -95,7 +95,7 @@ export default function EnvContainer() {
         window.clearInterval(timer.current);
         if (mode === 'realtime') {
             pullOnce();
-            timer.current = window.setInterval(pullOnce, 1000);
+            timer.current = window.setInterval(pullOnce, 500);
         }
         return () => window.clearInterval(timer.current);
     }, [mode, pullOnce]);
