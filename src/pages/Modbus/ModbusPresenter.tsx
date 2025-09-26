@@ -143,24 +143,18 @@ export default function ModbusPresenter({
           - xKey: "bucket" (normalizeRows에서 ISO 또는 epoch로 변환)
           - csvExport: 범위 다운로드를 지원하도록 apiPath와 device_id 전달 */}
             <div className={styles.card} style={{ height: 420 }}>
-                {loading ? (
-                    <Loading />
-                ) : error ? (
-                    <Error msg={error} />
-                ) : (
-                    <LineChartWrapper
-                        data={data}
-                        keys={['total_active_power_kw', 'total_active_energy_kwh']}
-                        labels={{ total_active_power_kw: '전력 (kW)', total_active_energy_kwh: '에너지 (kWh)' }}
-                        xKey="bucket"
-                        csvExport={{
-                            apiPath: '/data/modbus/query',
-                            // 백엔드가 device_id 파라미터를 기대하므로 동일한 이름으로 전달
-                            extraParams: { device_id: deviceId ?? undefined },
-                            filePrefix: 'modbus',
-                        }}
-                    />
-                )}
+                <LineChartWrapper
+                    data={data}
+                    keys={['total_active_power_kw', 'total_active_energy_kwh']}
+                    labels={{ total_active_power_kw: '전력 (kW)', total_active_energy_kwh: '에너지 (kWh)' }}
+                    xKey="bucket"
+                    csvExport={{
+                        apiPath: '/data/modbus/query',
+                        // 백엔드가 device_id 파라미터를 기대하므로 동일한 이름으로 전달
+                        extraParams: { device_id: deviceId ?? undefined },
+                        filePrefix: 'modbus',
+                    }}
+                />
             </div>
 
             {/* 통계 / 로그 */}
