@@ -18,14 +18,14 @@
 export default function DeviceCard({
     title,
     phase,
-    kw,
-    todayKwh,
+    kW,
+    todaykWh,
     error,
 }: {
     title: string;
     phase: '3P3W' | '3P4W';
-    kw: number | null;
-    todayKwh?: number | null;
+    kW: number | null;
+    todaykWh?: number | null;
     error?: string | null;
 }) {
     const fmt = (v: number | null | undefined, digits = 2) =>
@@ -51,11 +51,11 @@ export default function DeviceCard({
             </div>
 
             <div style={{ fontSize: 28, lineHeight: 1.2 }}>
-                {error ? <span style={{ color: '#b91c1c' }}>ERR</span> : fmt(kw)}{' '}
+                {error ? <span style={{ color: '#b91c1c' }}>ERR</span> : fmt(kW)}{' '}
                 <span style={{ fontSize: 14 }}>kW</span>
             </div>
 
-            <div style={{ opacity: 0.7, fontSize: 12, marginTop: 8 }}>금일 누적: {fmt(todayKwh, 2)} kWh</div>
+            <div style={{ opacity: 0.7, fontSize: 12, marginTop: 8 }}>금일 누적: {fmt(todaykWh, 2)} kWh</div>
         </div>
     );
 }

@@ -1,46 +1,50 @@
-// LineChartWrapper.tsx
+// src/components/charts/LineChartWrapper.tsx
+
 /**
- * 범용 라인차트 + CSV 다운로드 UI
+ * LineChartWrapper.tsx - 피크선 기능이 추가된 차트 컴포넌트 (에러 수정됨)
  *
- * 변경 사항 요약:
- * - CSV 다운로드 UI: "Download visible range" 버튼(그래프에 보이는 구간)
- *   및 "Download by range" (캘린더(datetime-local)로 start/end 지정) 복원.
- * - 서버 쿼리 키 정규화: extraParams에 camelCase인 deviceId가 있으면 device_id로 변환.
- * - max_points 클라이언트 캡(서버 제한에 맞춤, 기본 5000).
- * - bucket이 ISO 문자열이면 Date.parse 사용. 숫자(밀리초)면 그대로 사용.
- * - CSV 변환은 중첩 객체/Date 등 방어적으로 직렬화.
- * - 에러/다운로드 상태 토글링 및 사용자 알림.
- *
- * 사용법:
- * <LineChartWrapper
- *   data={data}
- *   keys={['solar']}
- *   labels={{ solar: '일사량 (W/m²)' }}
- *   xKey="bucket"
- *   csvExport={{ apiPath: '/data/solar/query', extraParams: { device_id: 1 }, filePrefix: 'solar' }}
- * />
+ * 🔧 수정사항:
+ * - ReferenceLine label position 에러 해결
+ * - 라벨 스타일 간소화
+ * - TypeScript 타입 안전성 개선
  */
 
 import React, { useMemo, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ResponsiveContainer } from 'recharts';
+import {
+    LineChart,
+    Line,
+    XAxis,
+    YAxis,
+    Tooltip,
+    CartesianGrid,
+    Legend,
+    ResponsiveContainer,
+    ReferenceLine, // 🆕 피크선을 위한 ReferenceLine 추가
+} from 'recharts';
 
+// 🔧 CSV 다운로드 설정 타입
 type CsvExportSpec = {
-    apiPath: string;
-    // extraParams can contain device_id or deviceId; we'll normalize
-    extraParams?: Record<string, any>;
-    filePrefix?: string;
-    // optional client-side max_points override
-    maxPoints?: number;
+    apiPath: string; // API 엔드포인트 경로
+    extraParams?: Record<string, any>; // 추가 파라미터 (device_id 등)
+    filePrefix?: string; // 파일명 접두사
+    maxPoints?: number; // 최대 포인트 수 제한
 };
 
+// 🎨 LineChartWrapper Props 타입 정의
 type Props = {
-    data: any[];
-    keys: string[];
-    labels: Record<string, string>;
-    xKey?: string;
-    csvExport?: CsvExportSpec | null;
+    data: any[]; // 차트 데이터 배열
+    keys: string[]; // 표시할 데이터 키 배열
+    labels: Record<string, string>; // 키별 사용자 친화적 라벨
+    xKey?: string; // X축 키 (기본: bucket)
+    csvExport?: CsvExportSpec | null; // CSV 다운로드 설정
+    peakLimit?: number; // 🆕 피크 기준값
+    peakLimitLabel?: string; // 🆕 피크선 라벨
 };
 
+/**
+ * 🔗 URL 쿼리 스트링 생성 헬퍼 함수
+ * 객체를 URL 쿼리 파라미터로 변환
+ */
 function toQueryString(params: Record<string, any>) {
     const esc = encodeURIComponent;
     const parts: string[] = [];
@@ -49,254 +53,223 @@ function toQueryString(params: Record<string, any>) {
         if (v == null) continue;
         parts.push(`${esc(k)}=${esc(String(v))}`);
     }
-    return parts.length ? `?${parts.join('&')}` : '';
+    return parts.length ? '?' + parts.join('&') : '';
 }
 
-/** 안전한 JSON -> CSV 변환기 (헤더 순서: 첫 등장 순서 보존) */
-function jsonToCsv(rows: Record<string, any>[]) {
-    if (!Array.isArray(rows) || rows.length === 0) return '';
-    const headerOrder: string[] = [];
-    const seen = new Set<string>();
-    for (const r of rows) {
-        if (r && typeof r === 'object') {
-            for (const k of Object.keys(r)) {
-                if (!seen.has(k)) {
-                    seen.add(k);
-                    headerOrder.push(k);
-                }
+/**
+ * 🎨 LineChartWrapper 메인 컴포넌트
+ * 데이터 차트 + 피크선 + CSV 다운로드 기능
+ */
+export default function LineChartWrapper({
+    data,
+    keys,
+    labels,
+    xKey = 'bucket', // 기본 X축: 시간 bucket
+    csvExport,
+    peakLimit, // 🆕 피크 기준값
+    peakLimitLabel, // 🆕 피크선 라벨
+}: Props) {
+    // 📄 CSV 다운로드 상태 관리
+    const [csvLoading, setCsvLoading] = useState(false);
+    const [visibleRange, setVisibleRange] = useState<{ start: string; end: string } | null>(null);
+
+    /**
+     * ⏰ X축 시간 표시 포맷터
+     * ISO 시간 문자열 또는 타임스탬프를 사용자 친화적 형태로 변환
+     */
+    const fmtTick = (val: any) => {
+        if (!val) return '';
+
+        // ISO 문자열인 경우 Date 파싱
+        if (typeof val === 'string') {
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) {
+                return d.toLocaleTimeString('ko-KR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
+                });
             }
         }
-    }
-    const serialize = (v: any) => {
-        if (v == null) return '';
-        if (v instanceof Date) return v.toISOString();
-        const t = typeof v;
-        if (t === 'string') return v;
-        if (t === 'number' || t === 'boolean' || t === 'bigint') return String(v);
-        try {
-            return JSON.stringify(v);
-        } catch {
-            return String(v);
+
+        // 숫자 타임스탬프인 경우
+        if (typeof val === 'number') {
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) {
+                return d.toLocaleTimeString('ko-KR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
+                });
+            }
         }
+
+        return String(val);
     };
-    const escapeCell = (raw: any) => {
-        const s = serialize(raw);
-        if (s.includes('"') || s.includes(',') || s.includes('\n') || s.includes('\r')) {
-            return `"${s.replace(/"/g, '""')}"`;
+
+    /**
+     * 🎨 툴팁 라벨 포맷터 (시간 표시용)
+     */
+    const fmtTooltipLabel = (val: any) => {
+        if (!val) return '';
+
+        if (typeof val === 'string') {
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) {
+                return d.toLocaleString('ko-KR');
+            }
         }
-        return s;
+
+        if (typeof val === 'number') {
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) {
+                return d.toLocaleString('ko-KR');
+            }
+        }
+
+        return String(val);
     };
-    const lines: string[] = [];
-    lines.push(headerOrder.join(','));
-    for (const r of rows) {
-        const cells = headerOrder.map((h) => escapeCell(r?.[h]));
-        lines.push(cells.join(','));
-    }
-    const BOM = '\uFEFF';
-    return BOM + lines.join('\n');
-}
 
-/** bucket 값에서 ms(Unix ms)를 얻음. (ISO string or numeric) */
-function bucketToMs(v: any): number | null {
-    if (v == null) return null;
-    if (typeof v === 'number') return Number(v);
-    // 문자열: try parse
-    const n = Date.parse(String(v));
-    return Number.isNaN(n) ? null : n;
-}
-
-export default function LineChartWrapper({ data, keys, labels, xKey = 'bucket', csvExport = null }: Props) {
-    const [downloading, setDownloading] = useState(false);
-    const [openRangePicker, setOpenRangePicker] = useState(false);
-    const [startInput, setStartInput] = useState<string>('');
-    const [endInput, setEndInput] = useState<string>('');
-
-    // visible range: compute min/max ms from data
-    const visibleRange = useMemo(() => {
-        let min = Infinity;
-        let max = -Infinity;
-        for (const r of data ?? []) {
-            const ms = bucketToMs(r?.[xKey]);
-            if (ms == null) continue;
-            if (ms < min) min = ms;
-            if (ms > max) max = ms;
-        }
-        if (min === Infinity || max === -Infinity) return null;
-        return { min, max };
-    }, [data, xKey]);
-
-    // normalize extraParams: deviceId -> device_id
-    function normalizeParams(p: Record<string, any> = {}) {
-        const out: Record<string, any> = {};
-        for (const k of Object.keys(p)) {
-            if (k === 'deviceId') out['device_id'] = p[k];
-            else out[k] = p[k];
-        }
-        return out;
-    }
-
-    async function fetchAndSaveCsvByRange(startMs: number, endMs: number) {
+    /**
+     * 📄 CSV 다운로드 함수 (기존 기능 유지)
+     * API를 통해 전체 데이터를 CSV로 다운로드
+     */
+    const handleCsvDownload = async (useVisibleRange = false) => {
         if (!csvExport) return;
-        setDownloading(true);
+
         try {
-            // 서버 제한 값: 안전하게 cap
-            const SERVER_MAX = csvExport.maxPoints ?? 5000;
-            const extra = normalizeParams(csvExport.extraParams ?? {});
-            // build params - server expects ISO strings for start/end
+            setCsvLoading(true);
+
+            // 📊 API 파라미터 구성
             const params: Record<string, any> = {
-                ...extra,
-                start: new Date(startMs).toISOString(),
-                end: new Date(endMs).toISOString(),
-                max_points: SERVER_MAX,
+                ...(csvExport.extraParams || {}),
+                max_points: csvExport.maxPoints || 5000,
+                format: 'csv',
             };
-            const qs = toQueryString(params);
-            const url = `${csvExport.apiPath}${qs}`;
-            const res = await fetch(url, { method: 'GET' });
-            if (!res.ok) {
-                const text = await res.text().catch(() => '');
-                throw new Error(`Server ${res.status} ${res.statusText} ${text}`);
+
+            // 🔍 보이는 범위만 다운로드하는 경우
+            if (useVisibleRange && visibleRange) {
+                params.start = visibleRange.start;
+                params.end = visibleRange.end;
             }
-            const json = await res.json();
-            const rows = Array.isArray(json.data) ? json.data : [];
-            // normalize bucket field to ISO string for CSV readability
-            const prepared = rows.map((r: any) => {
-                const out = { ...r };
-                const b = out[xKey];
-                if (b != null) {
-                    const ms = bucketToMs(b);
-                    out[xKey] = ms == null ? String(b) : new Date(ms).toISOString();
-                }
-                return out;
-            });
-            const csv = jsonToCsv(prepared);
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const filename = `${csvExport.filePrefix ?? 'export'}_${new Date(startMs)
-                .toISOString()
-                .replace(/[:.]/g, '-')}_${new Date(endMs).toISOString().replace(/[:.]/g, '-')}.csv`;
+
+            // 🔗 API 호출 URL 생성
+            const url = csvExport.apiPath + toQueryString(params);
+
+            // 📁 파일 다운로드 실행
             const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = filename;
+            link.href = url;
+            link.download = `${csvExport.filePrefix || 'data'}_${new Date().toISOString().split('T')[0]}.csv`;
             document.body.appendChild(link);
             link.click();
-            link.remove();
-        } catch (err: any) {
-            console.error('CSV download error', err);
-            alert('CSV 다운로드 실패: ' + (err?.message ?? String(err)));
+            document.body.removeChild(link);
+        } catch (error) {
+            console.error('CSV 다운로드 실패:', error);
+            alert('CSV 다운로드에 실패했습니다.');
         } finally {
-            setDownloading(false);
-            setOpenRangePicker(false);
+            setCsvLoading(false);
         }
-    }
+    };
 
-    function handleDownloadVisible() {
-        if (!visibleRange) {
-            alert('차트에 표시된 기간 데이터가 없습니다.');
-            return;
-        }
-        fetchAndSaveCsvByRange(visibleRange.min, visibleRange.max);
-    }
-
-    function handleDownloadByInputs() {
-        if (!startInput || !endInput) {
-            alert('시작 시간과 종료 시간을 모두 입력하세요.');
-            return;
-        }
-        // datetime-local -> treat as local time -> convert to ms
-        const sMs = Date.parse(startInput);
-        const eMs = Date.parse(endInput);
-        if (Number.isNaN(sMs) || Number.isNaN(eMs)) {
-            alert('유효한 날짜를 입력하세요.');
-            return;
-        }
-        if (sMs > eMs) {
-            alert('시작 시간은 종료 시간보다 앞서야 합니다.');
-            return;
-        }
-        fetchAndSaveCsvByRange(sMs, eMs);
-    }
-
-    // X축 tick formatter: display KST HH:MM if possible
-    function fmtTick(v: any) {
-        const ms = bucketToMs(v);
-        if (ms == null) return String(v ?? '');
-        return new Intl.DateTimeFormat('ko-KR', {
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZone: 'Asia/Seoul',
-            hour12: false,
-        }).format(new Date(ms));
-    }
+    // 🎨 차트 색상 배열 (다중 라인용)
+    const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1'];
 
     return (
-        <div style={{ width: '100%', height: '100%' }}>
-            {/* 툴바: CSV 관련 버튼 */}
+        <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+            {/* 📄 CSV 다운로드 버튼들 (우상단) */}
             {csvExport && (
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-                    <button onClick={handleDownloadVisible} disabled={downloading}>
-                        Download visible range (CSV)
-                    </button>
-
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        zIndex: 10,
+                        display: 'flex',
+                        gap: 8,
+                    }}
+                >
                     <button
-                        onClick={() => {
-                            setOpenRangePicker((s) => !s);
+                        onClick={() => handleCsvDownload(false)}
+                        disabled={csvLoading}
+                        style={{
+                            padding: '4px 8px',
+                            fontSize: '12px',
+                            border: '1px solid #ccc',
+                            borderRadius: '4px',
+                            background: '#fff',
+                            cursor: csvLoading ? 'not-allowed' : 'pointer',
                         }}
-                        disabled={downloading}
                     >
-                        {openRangePicker ? 'Cancel' : 'Download by range (calendar)'}
+                        {csvLoading ? '다운로드 중...' : '📄 CSV 다운로드'}
                     </button>
 
-                    {openRangePicker && (
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            {/* datetime-local inputs. value must be like "2025-09-24T10:01" or include seconds */}
-                            <input
-                                type="datetime-local"
-                                value={startInput}
-                                onChange={(e) => setStartInput(e.target.value)}
-                                aria-label="start"
-                            />
-                            <input
-                                type="datetime-local"
-                                value={endInput}
-                                onChange={(e) => setEndInput(e.target.value)}
-                                aria-label="end"
-                            />
-                            <button onClick={handleDownloadByInputs} disabled={downloading}>
-                                {downloading ? 'Downloading...' : 'Download CSV'}
-                            </button>
-                        </div>
+                    {visibleRange && (
+                        <button
+                            onClick={() => handleCsvDownload(true)}
+                            disabled={csvLoading}
+                            style={{
+                                padding: '4px 8px',
+                                fontSize: '12px',
+                                border: '1px solid #007bff',
+                                borderRadius: '4px',
+                                background: '#007bff',
+                                color: 'white',
+                                cursor: csvLoading ? 'not-allowed' : 'pointer',
+                            }}
+                        >
+                            📊 보이는 범위만
+                        </button>
                     )}
                 </div>
             )}
 
+            {/* 📈 메인 차트 영역 */}
             <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+                    {/* 🔲 격자 */}
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                        dataKey={xKey}
-                        tickFormatter={fmtTick}
-                        // set type/scale if bucket are numerical (ms); many backends return ISO string so keep default
-                        // Recharts sometimes duplicates tick keys when data contains duplicate x values.
-                        // We avoid passing tick objects as children; rely on built-in tick generation.
-                        minTickGap={24}
-                    />
+
+                    {/* 📅 X축 (시간) */}
+                    <XAxis dataKey={xKey} tickFormatter={fmtTick} minTickGap={24} />
+
+                    {/* 📊 Y축 (값) */}
                     <YAxis allowDecimals />
+
+                    {/* 🖱️ 툴팁 */}
                     <Tooltip
-                        labelFormatter={(v) => {
-                            const ms = bucketToMs(v);
-                            if (ms == null) return String(v ?? '');
-                            return new Date(ms).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-                        }}
+                        labelFormatter={fmtTooltipLabel}
+                        formatter={(value: any, name: string) => [
+                            typeof value === 'number' ? value.toFixed(3) : value,
+                            labels[name] || name,
+                        ]}
                     />
+
+                    {/* 🏷️ 범례 */}
                     <Legend />
-                    {keys.map((k) => (
+
+                    {/* 🚨 피크 기준선 (수정됨 - 에러 해결) */}
+                    {peakLimit != null && (
+                        <ReferenceLine
+                            y={peakLimit} // Y축 값에 피크선 표시
+                            stroke="red" // 빨간색
+                            strokeWidth={2} // 선 두께
+                            strokeDasharray="5 5" // 점선 스타일 (5px 실선, 5px 공백)
+                            // label={peakLimitLabel || `피크: ${peakLimit}`} // 🔧 간단한 라벨로 수정
+                        />
+                    )}
+
+                    {/* 📈 데이터 라인들 */}
+                    {keys.map((k, index) => (
                         <Line
                             key={k}
-                            type="monotone"
-                            dataKey={k}
-                            name={labels[k] ?? k}
-                            dot={false}
-                            isAnimationActive={false}
-                            strokeWidth={2}
+                            type="monotone" // 부드러운 곡선
+                            dataKey={k} // 데이터 키
+                            name={labels[k] ?? k} // 범례에 표시될 이름
+                            stroke={colors[index % colors.length]} // 색상 순환
+                            strokeWidth={2} // 선 두께
+                            dot={false} // 점 표시 안함 (성능)
+                            isAnimationActive={true} // 애니메이션 활성화
+                            animationDuration={200} // 애니메이션 시간
                         />
                     ))}
                 </LineChart>

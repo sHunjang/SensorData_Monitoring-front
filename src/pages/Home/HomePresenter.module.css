@@ -1,141 +1,367 @@
-/* 홈 대시보드 - 무채색 베이스 + 포인트 색상 */
-.dashboard {
-    padding: 20px;
-    background: #f8f9fa;
+/* 트레이딩 스타일 - Home 대시보드 페이지 (글자 크기 확대) */
+
+.container {
+    padding: 8px;
+    background: #0b0e11;
     min-height: 100vh;
     box-sizing: border-box;
+    color: #ffffff;
 }
 
-/* 2x2 그리드로 고정 */
-.grid {
+.content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    gap: 16px;
+}
+
+/* 트레이딩 헤더 */
+.header {
+    background: linear-gradient(135deg, #131722 0%, #1e2329 100%);
+    border: 1px solid #2e3238;
+    border-radius: 8px;
+    padding: 18px 24px; /* 패딩 증가 */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.title {
+    font-size: 26px; /* 20px → 26px */
+    font-weight: 700;
+    color: #f7f8fa;
+    margin: 0;
+}
+
+.subtitle {
+    font-size: 15px; /* 12px → 15px */
+    color: #848e9c;
+    margin-top: 4px;
+}
+
+.priceInfo {
+    text-align: right;
+}
+
+.currentPrice {
+    font-size: 36px; /* 28px → 36px */
+    font-weight: 700;
+    color: #0ecb81;
+    margin: 0;
+}
+
+.priceChange {
+    font-size: 15px; /* 12px → 15px */
+    color: #0ecb81;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+/* 2x2 대시보드 그리드 */
+.dashboardGrid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     grid-template-rows: 1fr 1fr;
     gap: 16px;
-    max-width: 980px;
-    height: calc(100vh - 80px);
-    margin: 0 auto;
+    min-height: 460px; /* 400px → 460px (카드 높이 증가) */
 }
 
+/* 카드 공통 스타일 */
 .card {
-    background: white;
+    background: linear-gradient(135deg, #131722 0%, #1e2329 100%);
+    border: 1px solid #2e3238;
     border-radius: 12px;
-    padding: 24px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    border: 1px solid #e9ecef;
+    padding: 28px; /* 20px → 28px */
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
+    justify-content: space-between;
     position: relative;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     overflow: hidden;
-    transition: transform 0.2s ease;
 }
 
 .card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
 }
 
-/* 각 카드의 상단 포인트 색상 바 */
-.card::before {
+/* 카드별 상단 색상 바 */
+.powerCard::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px; /* 3px → 4px */
+    background: linear-gradient(90deg, #0ecb81, #17a2b8);
+}
+
+.energyCard::before {
     content: '';
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     height: 4px;
+    background: linear-gradient(90deg, #0ecb81, #28a745);
 }
 
-.card:nth-child(1)::before {
-    background: #007bff;
-} /* 전력 - 파랑 */
-.card:nth-child(2)::before {
-    background: #28a745;
-} /* 에너지 - 초록 */
-.card:nth-child(3)::before {
-    background: #70633a;
-} /* 온도 - 노랑 */
-.card:nth-child(4)::before {
-    background: #17a2b8;
-} /* 태양광 - 시안 */
+.envCard::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #f7931e, #ffc107);
+}
 
-.card h3 {
-    margin: 0 0 16px 0;
-    font-size: 16px;
+.solarCard::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #17a2b8, #20c997);
+}
+
+/* 카드 헤더 */
+.cardHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px; /* 16px → 20px */
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.cardIcon {
+    font-size: 28px; /* 20px → 28px */
+    width: 40px; /* 32px → 40px */
+    height: 40px; /* 32px → 40px */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(247, 248, 250, 0.1);
+    border-radius: 8px; /* 6px → 8px */
+}
+
+.cardTitle {
+    font-size: 15px; /* 12px → 15px */
     font-weight: 600;
-    color: #6c757d;
+    color: #848e9c;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    flex: 1;
+    margin-left: 12px; /* 8px → 12px */
 }
 
-.value {
-    font-size: 36px;
+.cardStatus {
+    font-size: 13px; /* 10px → 13px */
+    font-weight: 600;
+    padding: 4px 8px; /* 2px 6px → 4px 8px */
+    background: rgba(132, 142, 156, 0.1);
+    border-radius: 6px; /* 4px → 6px */
+    white-space: nowrap;
+}
+
+/* 카드 콘텐츠 */
+.cardContent {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    text-align: center;
+    flex: 1;
+    gap: 6px; /* 4px → 6px */
+}
+
+.cardValue {
+    font-size: 42px; /* 32px → 42px */
     font-weight: 700;
-    color: #212529;
-    margin: 8px 0;
+    color: #f7f8fa;
+    line-height: 1;
 }
 
-/* 각 카드의 값에 포인트 색상 적용 */
-.card:nth-child(1) .value {
-    color: #007bff;
-}
-.card:nth-child(2) .value {
-    color: #28a745;
-}
-.card:nth-child(3) .value {
-    color: #70633a;
-}
-.card:nth-child(4) .value {
-    color: #17a2b8;
+.cardUnit {
+    font-size: 18px; /* 14px → 18px */
+    color: #848e9c;
+    font-weight: 500;
 }
 
-.unit {
-    font-size: 14px;
-    color: #6c757d;
-    margin-left: 4px;
-}
-
-.error {
-    color: #dc3545;
-    background: #f8d7da;
-    padding: 12px;
+/* 상태 바 */
+.statusBar {
+    background: linear-gradient(135deg, #131722 0%, #1e2329 100%);
+    border: 1px solid #2e3238;
     border-radius: 8px;
-    font-size: 14px;
-    border: 1px solid #f5c6cb;
-    width: 100%;
+    padding: 16px 20px; /* 12px 16px → 16px 20px */
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    gap: 16px; /* 12px → 16px */
 }
 
-/* 1024x768 최적화 */
-@media (max-width: 1024px) and (max-height: 768px) {
-    .dashboard {
-        padding: 16px;
+.statusItem {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* 6px → 8px */
+    font-size: 14px; /* 11px → 14px */
+    color: #848e9c;
+    font-weight: 500;
+}
+
+.statusDot {
+    width: 10px; /* 8px → 10px */
+    height: 10px; /* 8px → 10px */
+    border-radius: 50%;
+    background: #0ecb81;
+}
+
+/* 반응형 - 태블릿 */
+@media (max-width: 1024px) {
+    .container {
+        padding: 8px;
     }
 
-    .grid {
-        height: calc(100vh - 64px);
-        max-width: 992px;
+    .title {
+        font-size: 22px; /* 26px → 22px */
+    }
+
+    .currentPrice {
+        font-size: 32px; /* 36px → 32px */
+    }
+
+    .dashboardGrid {
+        gap: 12px;
+        min-height: 420px; /* 460px → 420px */
     }
 
     .card {
-        padding: 20px;
+        padding: 22px; /* 28px → 22px */
     }
 
-    .value {
-        font-size: 32px;
+    .cardValue {
+        font-size: 36px; /* 42px → 36px */
+    }
+
+    .cardIcon {
+        font-size: 24px; /* 28px → 24px */
+        width: 36px; /* 40px → 36px */
+        height: 36px; /* 40px → 36px */
+    }
+
+    .cardUnit {
+        font-size: 16px; /* 18px → 16px */
     }
 }
 
-/* 작은 화면 대응 */
+/* 반응형 - 모바일 */
 @media (max-width: 768px) {
-    .grid {
+    .container {
+        padding: 4px;
+    }
+
+    .header {
+        flex-direction: column;
+        text-align: center;
+        gap: 12px; /* 8px → 12px */
+        padding: 16px 20px; /* 패딩 유지 */
+    }
+
+    .title {
+        font-size: 20px; /* 22px → 20px */
+    }
+
+    .subtitle {
+        font-size: 13px; /* 15px → 13px */
+    }
+
+    .priceInfo {
+        text-align: center;
+    }
+
+    .currentPrice {
+        font-size: 28px; /* 32px → 28px */
+    }
+
+    .priceChange {
+        font-size: 13px; /* 15px → 13px */
+    }
+
+    .dashboardGrid {
         grid-template-columns: 1fr;
-        grid-template-rows: repeat(4, minmax(120px, 1fr));
-        height: auto;
+        grid-template-rows: repeat(4, minmax(160px, 1fr)); /* 120px → 160px */
+        gap: 12px;
+        min-height: auto;
     }
 
     .card {
-        min-height: 120px;
+        padding: 20px; /* 22px → 20px */
+        min-height: 160px; /* 120px → 160px */
     }
+
+    .cardValue {
+        font-size: 32px; /* 36px → 32px */
+    }
+
+    .cardIcon {
+        font-size: 22px; /* 24px → 22px */
+        width: 32px; /* 36px → 32px */
+        height: 32px; /* 36px → 32px */
+    }
+
+    .cardTitle {
+        font-size: 13px; /* 15px → 13px */
+    }
+
+    .cardStatus {
+        font-size: 11px; /* 13px → 11px */
+    }
+
+    .cardUnit {
+        font-size: 14px; /* 16px → 14px */
+    }
+
+    .statusBar {
+        flex-direction: column;
+        gap: 12px;
+        padding: 14px 18px;
+    }
+
+    .statusItem {
+        justify-content: center;
+        font-size: 13px; /* 14px → 13px */
+    }
+}
+
+/* 다크 테마 스크롤바 */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #2b2f36;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4a5568;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #5a6578;
+}
+
+/* 에러 메시지 스타일 오버라이드 */
+.card .error {
+    background: rgba(246, 70, 93, 0.1);
+    border: 1px solid #f6465d;
+    color: #f6465d;
+    padding: 14px; /* 12px → 14px */
+    border-radius: 6px;
+    font-size: 14px; /* 12px → 14px */
+    text-align: center;
 }
