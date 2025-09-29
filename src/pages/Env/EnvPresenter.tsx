@@ -1,389 +1,433 @@
 // src/pages/Env/EnvPresenter.tsx
 
 /**
- * EnvPresenter - 환경센서 모니터링 UI 컴포넌트
+ * EnvPresenter.tsx - 환경센서 모니터링 UI (드릴다운 시스템)
  *
- * 주요 기능:
- * 1. 주식 거래 스타일의 다크 테마 UI (그린 색상 체계)
- * 2. 실시간 온습도 값 표시 (상단 헤더)
- * 3. 계층적 차트 (주간 → 일간 드릴다운)
- * 4. 환경센서 특화 통계 카드 (온도/습도/쾌적도)
- * 5. 쾌적도 지수 계산 및 표시
- * 6. 시스템 활동 로그 표시
- * 7. 백엔드 env_router.py 데이터와 완벽 연동
+ * 🎨 디자인 특징:
+ * - 다크 테마 환경센서 전용 스타일
+ * - 온도/습도 실시간 표시를 게이지처럼 시각화
+ * - 드릴다운 차트: 클릭으로 더 세부적인 시간 범위로 이동
+ * - 6개 통계 카드: 현재/평균/최대/최소/개수/임계값상태
+ * - 환경 임계값 설정 및 시각화
+ * - 활동 로그 (환경센서 전용)
  */
 
 import React from 'react';
 import styles from './Env.module.css';
 import LineChartWrapper from '@/components/charts/LineChartWrapper';
+import Loading from '@/components/common/Loading';
 import Error from '@/components/common/Error';
 
-// Preset 타입 정의 - Container와 동일하게 맞춰야 함
-type Preset = '15m' | '1h' | '1d' | '1w' | '1mo';
-
-// Props 타입 정의 (Container에서 전달받는 데이터)
+/**
+ * 🔧 Props 타입 정의 (EnvContainer와 연동)
+ */
 type Props = {
-    // 장치 관리
+    // 장치 및 데이터 선택
     deviceId: number;
     setDeviceId: (id: number) => void;
     deviceOptions: number[];
+    column: string;
+    setColumn: (column: string) => void;
 
-    // 시간 범위 및 모드
-    preset: Preset;
-    setPreset: (p: Preset) => void;
-    mode: 'realtime' | 'range';
-    setMode: (m: 'realtime' | 'range') => void;
+    // 줌 컨트롤
+    zoomLevel: number;
+    zoomLabel: string;
+    onZoomIn: () => void;
+    onZoomOut: () => void;
+    canZoomIn: boolean;
+    canZoomOut: boolean;
 
-    // 액션
-    onQuery: () => Promise<void> | void;
+    // 차트 인터랙션
+    onDataPointClick?: (dataPoint: any, timeMs: number) => void;
+    onManualRefresh: () => void;
 
-    // 데이터
+    // 데이터와 상태
     data: any[];
     stats: any;
+    loading: boolean;
     error: string | null;
     logs: string[];
+
+    // 환경 임계값
+    peakLimits: Record<string, number>;
+    setPeakLimits: React.Dispatch<React.SetStateAction<Record<string, number>>>;
 };
 
 export default function EnvPresenter({
     deviceId,
     setDeviceId,
     deviceOptions,
-    preset,
-    setPreset,
-    mode,
-    setMode,
-    onQuery,
+    column,
+    setColumn,
+    zoomLevel,
+    zoomLabel,
+    onZoomIn,
+    onZoomOut,
+    canZoomIn,
+    canZoomOut,
+    onDataPointClick,
+    onManualRefresh,
     data,
     stats,
+    loading,
     error,
     logs,
+    peakLimits,
+    setPeakLimits,
 }: Props) {
-    // ============= 실시간 값 계산 =============
+    // 🔄 로딩 및 에러 상태 처리
+    if (loading) return <Loading />;
+    if (error) return <Error msg={error} />;
 
-    /**
-     * 최신 데이터 포인트에서 현재 온습도 추출
-     * - 차트 데이터의 마지막 항목을 현재값으로 사용
-     * - 백엔드 env_router.py의 필드명과 정확히 매칭
-     */
-    const last = data?.length ? data[data.length - 1] : null;
+    // ============= 환경 센서 실시간 값 및 변화량 계산 =============
 
-    // 현재 온도 값 (백엔드 필드명: temperature)
-    const currentTemp = last?.temperature ?? null;
-    // 현재 습도 값 (백엔드 필드명: humidity)
-    const currentHumidity = last?.humidity ?? null;
+    const lastDataPoint = data?.length ? data[data.length - 1] : null;
+    const currentValue = lastDataPoint?.[column] ?? 0;
+    const previousValue = data?.length > 1 ? data[data.length - 2]?.[column] ?? 0 : 0;
 
-    // 이전 값들 (변화량 계산용)
-    const previousData = data?.length > 1 ? data[data.length - 2] : null;
-    const previousTemp = previousData?.temperature ?? 0;
-    const previousHumidity = previousData?.humidity ?? 0;
+    const valueChange = currentValue - previousValue;
+    const changePercent = previousValue ? ((valueChange / previousValue) * 100).toFixed(2) : '0.00';
 
-    /**
-     * 온도 변화량 및 퍼센트 계산
-     */
-    const tempChange = currentTemp && previousTemp ? currentTemp - previousTemp : 0;
-    const tempChangePercent = previousTemp ? ((tempChange / previousTemp) * 100).toFixed(2) : '0.00';
+    // 🎯 현재 컬럼의 환경 임계값
+    const currentPeakLimit = peakLimits[column];
 
-    // ============= UI 헬퍼 함수 =============
+    // 🏷️ 환경센서 컬럼별 한글 라벨 정의
+    const columnLabels: Record<string, string> = {
+        temperature: '온도 (°C)',
+        humidity: '습도 (%)',
+    };
 
-    /**
-     * 시간 범위 버튼 설정
-     * - 환경센서 모니터링에 적합한 시간 프레임
-     */
-    const timeframes: { label: string; value: Preset }[] = [
-        { label: '15m', value: '15m' },
-        { label: '1h', value: '1h' },
-        { label: '1d', value: '1d' },
-        { label: '1w', value: '1w' },
-        { label: '1mo', value: '1mo' },
-    ];
-
-    /**
-     * 온도 상태 판정
-     * - 현재 온도 값에 따른 상태 메시지와 색상
-     */
-    const getTempStatus = (temp: number | null) => {
-        if (!temp) return { text: '측정 중', color: '#94a3b8', icon: '🌡️' };
-        if (temp >= 30) return { text: '높음', color: '#f87171', icon: '🔥' };
-        if (temp >= 20) return { text: '적정', color: '#4ade80', icon: '✅' };
-        if (temp >= 10) return { text: '서늘', color: '#60a5fa', icon: '❄️' };
-        return { text: '낮음', color: '#a78bfa', icon: '🧊' };
+    // 🏷️ 환경센서 컬럼별 단위 정의
+    const unitLabels: Record<string, string> = {
+        temperature: '°C',
+        humidity: '%',
     };
 
     /**
-     * 습도 상태 판정
-     * - 현재 습도 값에 따른 상태 메시지와 색상
+     * 🌡️ 환경센서 상태 판정 함수
      */
-    const getHumidityStatus = (humidity: number | null) => {
-        if (!humidity) return { text: '측정 중', color: '#94a3b8', icon: '💧' };
-        if (humidity >= 70) return { text: '높음', color: '#f87171', icon: '🌊' };
-        if (humidity >= 40) return { text: '적정', color: '#4ade80', icon: '💚' };
-        if (humidity >= 20) return { text: '건조', color: '#fbbf24', icon: '🏜️' };
-        return { text: '매우건조', color: '#f87171', icon: '🔥' };
+    const getEnvironmentStatus = (value: number, columnType: string) => {
+        switch (columnType) {
+            case 'temperature':
+                if (value >= 35) return { text: '고온경보', color: '#f6465d', icon: '🔥' };
+                if (value >= 30) return { text: '고온주의', color: '#f7931e', icon: '🌡️' };
+                if (value >= 20) return { text: '적정온도', color: '#0ecb81', icon: '✅' };
+                if (value >= 10) return { text: '저온주의', color: '#f7931e', icon: '❄️' };
+                return { text: '저온경보', color: '#f6465d', icon: '🧊' };
+            case 'humidity':
+                if (value >= 80) return { text: '고습경보', color: '#f6465d', icon: '💧' };
+                if (value >= 70) return { text: '고습주의', color: '#f7931e', icon: '🌫️' };
+                if (value >= 40) return { text: '적정습도', color: '#0ecb81', icon: '✅' };
+                if (value >= 30) return { text: '건조주의', color: '#f7931e', icon: '🏜️' };
+                return { text: '건조경보', color: '#f6465d', icon: '🔥' };
+            default:
+                return { text: '측정중', color: '#0ecb81', icon: '📊' };
+        }
     };
 
     /**
-     * 쾌적도 지수 계산
-     * - 온도와 습도를 기반으로 한 종합 쾌적도
-     * - 18-26°C, 40-60% 습도가 최적 조건
+     * 🚨 환경 임계값 업데이트 함수
      */
-    const getComfortIndex = (temp: number | null, humidity: number | null) => {
-        if (!temp || !humidity) return { score: 0, text: '측정 중', color: '#94a3b8' };
-
-        // 쾌적도 계산 로직 (0-100점)
-        let score = 100;
-
-        // 온도 점수 (18-26°C가 최적)
-        if (temp < 18) score -= (18 - temp) * 3;
-        else if (temp > 26) score -= (temp - 26) * 3;
-
-        // 습도 점수 (40-60%가 최적)
-        if (humidity < 40) score -= (40 - humidity) * 2;
-        else if (humidity > 60) score -= (humidity - 60) * 2;
-
-        score = Math.max(0, Math.min(100, score));
-
-        if (score >= 80) return { score, text: '매우쾌적', color: '#4ade80' };
-        if (score >= 60) return { score, text: '쾌적', color: '#22c55e' };
-        if (score >= 40) return { score, text: '보통', color: '#fbbf24' };
-        if (score >= 20) return { score, text: '불쾌적', color: '#f59e0b' };
-        return { score, text: '매우불쾌적', color: '#f87171' };
+    const handlePeakLimitChange = (inputValue: string) => {
+        const numericValue = parseFloat(inputValue);
+        if (!isNaN(numericValue) && numericValue > 0) {
+            setPeakLimits((prev) => ({
+                ...prev,
+                [column]: numericValue,
+            }));
+        }
     };
 
-    const tempStatus = getTempStatus(currentTemp);
-    const humidityStatus = getHumidityStatus(currentHumidity);
-    const comfortIndex = getComfortIndex(currentTemp, currentHumidity);
+    /**
+     * 🗑️ 환경 임계값 제거 함수
+     */
+    const handlePeakLimitRemove = () => {
+        setPeakLimits((prev) => {
+            const updated = { ...prev };
+            delete updated[column];
+            return updated;
+        });
+    };
 
-    // ============= UI 렌더링 =============
+    const environmentStatus = getEnvironmentStatus(currentValue, column);
+
+    // ============= 환경센서 UI 렌더링 =============
 
     return (
         <div className={styles.container}>
             <div className={styles.content}>
-                {/* ============= 트레이딩 스타일 헤더 ============= */}
+                {/* ============= 환경센서 헤더 ============= */}
                 <div className={styles.header}>
                     <div>
-                        {/* 환경센서 심볼처럼 표시 (ENV-21 형태) */}
-                        <h1 className={styles.title}>🌿 ENV-{deviceId}</h1>
-                        <div className={styles.subtitle}>Environmental Monitor • Real-time</div>
+                        <h1 className={styles.title}>🌡️ ENV-{deviceId}</h1>
+                        <div className={styles.subtitle}>환경 모니터링 • {zoomLabel} 범위</div>
                     </div>
 
                     <div className={styles.priceInfo}>
-                        {/* 현재 온도를 주식 가격처럼 크게 표시 */}
-                        <h2 className={styles.currentPrice}>{currentTemp?.toFixed(1) || '0.0'}°C</h2>
-
-                        {/* 변화량 및 퍼센트 (색상으로 증감 표시) */}
-                        <div className={`${styles.priceChange} ${tempChange < 0 ? styles.priceChangeNegative : ''}`}>
-                            <span>{tempStatus.icon}</span>
-                            <span>{tempChangePercent}%</span>
+                        <h2 className={styles.currentPrice}>
+                            {currentValue.toFixed(1)} {unitLabels[column]}
+                        </h2>
+                        <div className={`${styles.priceChange} ${valueChange < 0 ? styles.priceChangeNegative : ''}`}>
+                            <span>{valueChange >= 0 ? '📈' : '📉'}</span>
+                            <span>{changePercent}%</span>
                             <span>
-                                ({tempChange >= 0 ? '+' : ''}
-                                {tempChange.toFixed(1)})
+                                ({valueChange >= 0 ? '+' : ''}
+                                {valueChange.toFixed(1)})
                             </span>
                         </div>
                     </div>
                 </div>
 
-                {/* ============= 환경 데이터 카드 그리드 ============= */}
-                <div className={styles.envGrid}>
-                    {/* 온도 카드 */}
-                    <div className={styles.envCard}>
-                        <div className={styles.envHeader}>
-                            <span className={styles.envIcon}>🌡️</span>
-                            <span>온도</span>
-                        </div>
-                        <div className={styles.envValue}>
-                            {currentTemp?.toFixed(1) || '0.0'}
-                            <span className={styles.envUnit}>°C</span>
-                        </div>
-                        <div className={styles.envStatus} style={{ color: tempStatus.color }}>
-                            {tempStatus.text}
-                        </div>
-                    </div>
-
-                    {/* 습도 카드 */}
-                    <div className={styles.envCard}>
-                        <div className={styles.envHeader}>
-                            <span className={styles.envIcon}>💧</span>
-                            <span>습도</span>
-                        </div>
-                        <div className={styles.envValue}>
-                            {currentHumidity?.toFixed(1) || '0.0'}
-                            <span className={styles.envUnit}>%</span>
-                        </div>
-                        <div className={styles.envStatus} style={{ color: humidityStatus.color }}>
-                            {humidityStatus.text}
-                        </div>
-                    </div>
-
-                    {/* 쾌적도 지수 카드 */}
-                    <div className={styles.envCard}>
-                        <div className={styles.envHeader}>
-                            <span className={styles.envIcon}>😊</span>
-                            <span>쾌적도</span>
-                        </div>
-                        <div className={styles.envValue}>
-                            {Math.round(comfortIndex.score)}
-                            <span className={styles.envUnit}>/100</span>
-                        </div>
-                        <div className={styles.envStatus} style={{ color: comfortIndex.color }}>
-                            {comfortIndex.text}
-                        </div>
-                    </div>
-                </div>
-
-                {/* ============= 컨트롤 패널 ============= */}
+                {/* ============= 환경센서 컨트롤 패널 ============= */}
                 <div className={styles.controls}>
                     <div className={styles.controlsGrid}>
-                        {/* 장치 선택 드롭다운 */}
+                        {/* 환경센서 장치 선택 */}
                         <div className={styles.controlGroup}>
-                            <label>Env Device</label>
+                            <label>환경센서</label>
                             <select value={deviceId} onChange={(e) => setDeviceId(Number(e.target.value))}>
                                 {deviceOptions.map((id) => (
                                     <option key={id} value={id}>
-                                        Environment {id}
+                                        센서 {id}
                                     </option>
                                 ))}
                             </select>
                         </div>
 
-                        {/* 모니터링 모드 선택 */}
+                        {/* 환경 측정 항목 선택 */}
                         <div className={styles.controlGroup}>
-                            <label>Mode</label>
-                            <select value={mode} onChange={(e) => setMode(e.target.value as 'realtime' | 'range')}>
-                                <option value="realtime">Real-time</option>
-                                <option value="range">Historical</option>
+                            <label>측정 항목</label>
+                            <select value={column} onChange={(e) => setColumn(e.target.value)}>
+                                <option value="temperature">🌡️ 온도 (°C)</option>
+                                <option value="humidity">💧 습도 (%)</option>
                             </select>
                         </div>
 
-                        {/* 시간 범위 선택 */}
+                        {/* 줌 컨트롤 */}
                         <div className={styles.controlGroup}>
-                            <label>Period</label>
-                            <select value={preset} onChange={(e) => setPreset(e.target.value as Preset)}>
-                                {timeframes.map((tf) => (
-                                    <option key={tf.value} value={tf.value}>
-                                        {tf.label}
-                                    </option>
-                                ))}
-                            </select>
+                            <label>🔍 시간 범위</label>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                                <button
+                                    onClick={onZoomIn}
+                                    disabled={!canZoomIn}
+                                    style={{
+                                        flex: 1,
+                                        opacity: canZoomIn ? 1 : 0.5,
+                                        cursor: canZoomIn ? 'pointer' : 'not-allowed',
+                                        padding: '6px 8px',
+                                        fontSize: '11px',
+                                    }}
+                                    title={canZoomIn ? '더 세부적인 시간으로 확대' : '최대 확대됨'}
+                                >
+                                    🔍+ 확대
+                                </button>
+                                <button
+                                    onClick={onZoomOut}
+                                    disabled={!canZoomOut}
+                                    style={{
+                                        flex: 1,
+                                        opacity: canZoomOut ? 1 : 0.5,
+                                        cursor: canZoomOut ? 'pointer' : 'not-allowed',
+                                        padding: '6px 8px',
+                                        fontSize: '11px',
+                                    }}
+                                    title={canZoomOut ? '더 넓은 시간으로 축소' : '최대 축소됨'}
+                                >
+                                    🔍- 축소
+                                </button>
+                            </div>
                         </div>
 
-                        {/* 수동 새로고침 버튼 */}
+                        {/* 현재 시간 범위 표시 */}
+                        <div className={styles.controlGroup}>
+                            <label>📊 현재 보기</label>
+                            <div
+                                style={{
+                                    padding: '8px 12px',
+                                    background: '#2b2f36',
+                                    border: `2px solid ${zoomLevel <= 1 ? '#26a69a' : '#f7931e'}`,
+                                    borderRadius: '4px',
+                                    color: zoomLevel <= 1 ? '#26a69a' : '#f7931e',
+                                    fontSize: '12px',
+                                    textAlign: 'center',
+                                    fontWeight: '600',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '4px',
+                                }}
+                            >
+                                {zoomLevel <= 1 && <span>🔴</span>}
+                                📅 {zoomLabel}
+                                {zoomLevel <= 1 && <span>(실시간)</span>}
+                            </div>
+                        </div>
+
+                        {/* 환경 임계값 설정 */}
+                        <div className={styles.controlGroup}>
+                            <label>🚨 환경 임계값 ({unitLabels[column]})</label>
+                            <input
+                                type="number"
+                                step={column === 'temperature' ? '0.1' : '1'}
+                                value={currentPeakLimit || ''}
+                                onChange={(e) => handlePeakLimitChange(e.target.value)}
+                                placeholder={column === 'temperature' ? '온도 임계값' : '습도 임계값'}
+                                style={{
+                                    background: '#2b2f36',
+                                    border: '1px solid #2e3238',
+                                    color: '#f7f8fa',
+                                    padding: '8px 12px',
+                                    borderRadius: '4px',
+                                    fontSize: '12px',
+                                }}
+                            />
+                        </div>
+
+                        {/* 새로고침 및 임계값 제거 버튼 */}
                         <div className={styles.controlGroup}>
                             <label>&nbsp;</label>
-                            <button onClick={onQuery}>🔄 Refresh</button>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                                <button onClick={onManualRefresh} style={{ flex: 1, fontSize: '11px' }}>
+                                    🔄 새로고침
+                                </button>
+                                {currentPeakLimit && (
+                                    <button
+                                        onClick={handlePeakLimitRemove}
+                                        style={{
+                                            flex: 1,
+                                            background: '#f6465d',
+                                            borderColor: '#f6465d',
+                                            fontSize: '11px',
+                                        }}
+                                    >
+                                        🗑️ 제거
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* ============= 메인 차트 영역 ============= */}
+                {/* ============= 환경센서 드릴다운 차트 영역 ============= */}
                 <div className={styles.chartSection}>
                     <div className={styles.chartToolbar}>
-                        {/* 차트 제목 */}
-                        <div className={styles.chartTitle}>🌿 환경 모니터링</div>
-
-                        {/* 데이터 포인트 개수 및 현재 상태 */}
+                        <div className={styles.chartTitle}>🌡️ {columnLabels[column]} 환경 분석 차트</div>
                         <div className={styles.chartControls}>
-                            <span
-                                style={{
-                                    fontSize: '11px',
-                                    color: comfortIndex.color,
-                                    fontWeight: '600',
-                                }}
-                            >
-                                쾌적도: {comfortIndex.text} • {data.length} Datas
+                            <span style={{ fontSize: '11px', color: environmentStatus.color, fontWeight: '600' }}>
+                                {environmentStatus.icon} {environmentStatus.text} • {data.length}개 데이터
                             </span>
+                            {currentPeakLimit && (
+                                <span style={{ fontSize: '11px', color: '#f6465d', fontWeight: '600' }}>
+                                    • 🚨 임계값: {currentPeakLimit} {unitLabels[column]}
+                                </span>
+                            )}
+                            <span style={{ fontSize: '11px', color: '#f7931e', fontWeight: '600' }}>
+                                • 📊 범위: {zoomLabel}
+                            </span>
+                            {zoomLevel >= 2 && (
+                                <span style={{ fontSize: '11px', color: '#26a69a', fontWeight: '600' }}>
+                                    • 🖱️ 클릭으로 드릴다운 가능
+                                </span>
+                            )}
                         </div>
                     </div>
 
-                    {/* 에러 메시지 표시 */}
-                    {error && <Error msg={error} />}
+                    <div style={{ height: 'calc(100% - 60px)' }}>
+                        <LineChartWrapper
+                            data={data}
+                            keys={[column]}
+                            labels={columnLabels}
+                            xKey="bucket"
+                            zoomLevel={zoomLevel}
+                            peakLimit={currentPeakLimit}
+                            peakLimitLabel={`${columnLabels[column]} 임계값: ${currentPeakLimit || 0}`}
+                            onDataPointClick={onDataPointClick}
+                            csvExport={{
+                                apiPath: '/data/env/query',
+                                extraParams: { device_id: deviceId },
+                                filePrefix: `환경데이터-센서${deviceId}-${zoomLabel}`,
+                            }}
+                        />
+                    </div>
+                </div>
 
-                    {/* 드릴다운 가능한 시계열 차트 */}
-                    {!error && (
-                        <div style={{ height: 'calc(100% - 60px)' }}>
-                            <LineChartWrapper
-                                data={data}
-                                keys={['temperature', 'humidity']} // 온도, 습도 동시 표시
-                                labels={{
-                                    temperature: '온도 (°C)',
-                                    humidity: '습도 (%)',
-                                    temp: '온도 (°C)',
-                                    hum: '습도 (%)',
+                {/* ============= 환경센서 통계 카드 그리드 ============= */}
+                <div className={styles.statsGrid}>
+                    {/* 현재값 */}
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>현재값</div>
+                        <div className={styles.statValue}>{currentValue.toFixed(1)}</div>
+                        <div className={`${styles.statChange} ${valueChange < 0 ? styles.statChangeNegative : ''}`}>
+                            {valueChange >= 0 ? '+' : ''}
+                            {valueChange.toFixed(1)} {unitLabels[column]}
+                        </div>
+                    </div>
+
+                    {/* 평균값 */}
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>평균 ({zoomLabel})</div>
+                        <div className={styles.statValue}>{stats?.[column]?.avg?.toFixed(1) || '0.0'}</div>
+                        <div className={styles.statChange}>평균 {unitLabels[column]}</div>
+                    </div>
+
+                    {/* 최대값 */}
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>최고값 ({zoomLabel})</div>
+                        <div className={styles.statValue}>{stats?.[column]?.max?.toFixed(1) || '0.0'}</div>
+                        <div className={styles.statChange}>최고값</div>
+                    </div>
+
+                    {/* 최소값 */}
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>최저값 ({zoomLabel})</div>
+                        <div className={styles.statValue}>{stats?.[column]?.min?.toFixed(1) || '0.0'}</div>
+                        <div className={styles.statChange}>최저값</div>
+                    </div>
+
+                    {/* 데이터 개수 */}
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>측정 횟수</div>
+                        <div className={styles.statValue}>{stats?.[column]?.count || '0'}</div>
+                        <div className={styles.statChange}>회</div>
+                    </div>
+
+                    {/* 환경 임계값 상태 */}
+                    {currentPeakLimit && (
+                        <div className={styles.statCard}>
+                            <div className={styles.statLabel}>임계값 상태</div>
+                            <div
+                                className={styles.statValue}
+                                style={{
+                                    color:
+                                        (column === 'temperature' && currentValue > currentPeakLimit) ||
+                                        (column === 'humidity' && currentValue > currentPeakLimit)
+                                            ? '#f6465d'
+                                            : '#0ecb81',
                                 }}
-                                xKey="bucket"
-                                csvExport={{
-                                    // CSV 다운로드 설정
-                                    apiPath: '/api/env',
-                                    extraParams: { deviceId },
-                                    filePrefix: `env-device-${deviceId}`,
-                                }}
-                            />
+                            >
+                                {(column === 'temperature' && currentValue > currentPeakLimit) ||
+                                (column === 'humidity' && currentValue > currentPeakLimit)
+                                    ? '⚠️'
+                                    : '✅'}
+                            </div>
+                            <div className={styles.statChange}>
+                                {(column === 'temperature' && currentValue > currentPeakLimit) ||
+                                (column === 'humidity' && currentValue > currentPeakLimit)
+                                    ? '임계값 초과'
+                                    : '정상 범위'}
+                            </div>
                         </div>
                     )}
                 </div>
 
-                {/* ============= 환경 특화 통계 카드 그리드 ============= */}
-                <div className={styles.statsGrid}>
-                    {/* 평균 온도 카드 */}
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>Avg Temp</div>
-                        <div className={styles.statValue}>{stats?.temperature?.avg?.toFixed(1) || '0.0'}</div>
-                        <div className={styles.statChange}>°C (온도)</div>
-                    </div>
-
-                    {/* 평균 습도 카드 */}
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>Avg Humidity</div>
-                        <div className={styles.statValue}>{stats?.humidity?.avg?.toFixed(1) || '0.0'}</div>
-                        <div className={styles.statChange}>% (습도)</div>
-                    </div>
-
-                    {/* 최고 온도 카드 */}
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>Max Temp</div>
-                        <div className={styles.statValue}>{stats?.temperature?.max?.toFixed(1) || '0.0'}</div>
-                        <div className={styles.statChange}>최고온도</div>
-                    </div>
-
-                    {/* 최저 온도 카드 */}
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>Min Temp</div>
-                        <div className={styles.statValue}>{stats?.temperature?.min?.toFixed(1) || '0.0'}</div>
-                        <div className={styles.statChange}>최저온도</div>
-                    </div>
-
-                    {/* 습도 변화폭 
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>Humidity Range</div>
-                        <div className={styles.statValue}>
-                            {stats?.humidity?.max && stats?.humidity?.min
-                                ? (stats.humidity.max - stats.humidity.min).toFixed(1)
-                                : '0.0'}
-                        </div>
-                        <div className={styles.statChange}>변화폭</div>
-                    </div>
-                    */}
-
-                    {/* 데이터 포인트 개수 */}
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>Data Points</div>
-                        <div className={styles.statValue}>{stats?.temperature?.count || '0'}</div>
-                        <div className={styles.statChange}>측정 갯수</div>
-                    </div>
-                </div>
-
-                {/* ============= 시스템 로그 패널 ============= */}
+                {/* ============= 환경센서 활동 로그 패널 ============= */}
                 <div className={styles.logPanel}>
-                    <div className={styles.logHeader}>🌿 Environmental System Activity</div>
-
-                    {/* 최근 15개 로그만 표시 */}
-                    {logs.slice(-15).map((log, idx) => (
-                        <div key={idx} className={styles.logItem}>
-                            {log}
+                    <div className={styles.logHeader}>🌡️ 환경센서 활동 로그</div>
+                    {logs.slice(-20).map((logEntry, index) => (
+                        <div key={index} className={styles.logItem}>
+                            {logEntry}
                         </div>
                     ))}
-
-                    {/* 로그가 없을 때 표시 */}
-                    {logs.length === 0 && <div className={styles.logItem}>No recent environmental activity</div>}
+                    {logs.length === 0 && <div className={styles.logItem}>최근 활동 없음</div>}
                 </div>
             </div>
         </div>

@@ -1,298 +1,295 @@
 // src/pages/Solar/SolarContainer.tsx
 
 /**
- * SolarContainer - 일사량 모니터링 데이터 관리 컨테이너
+ * SolarContainer.tsx - 태양광센서 모니터링 드릴다운 시스템
  *
- * 주요 기능:
- * 1. 실시간/범위 모드로 태양광 일사량 데이터 조회
- * 2. 백엔드 solar_router.py와 완벽 연동
- * 3. 데이터 정규화 및 통계 계산 (일사량, 효율성)
- * 4. 백그라운드 자동 갱신 (실시간 모드)
- * 5. 에러 처리 및 로그 관리
- * 6. 드릴다운 차트 지원
- *
- * 데이터 흐름:
- * 백엔드 API → fetchSolarQuery() → normalizeRows() → 통계 계산 → UI 전달
- *
- * 측정 항목:
- * - irradiance: 일사량 (W/m²)
- * - solar: 레거시 일사량 필드
- * - device_id: 태양광 센서 장치 ID
+ * 🎯 핵심 기능:
+ * - 6단계 줌 레벨: 1시간 → 1일 → 1주일 → 1달 → 6개월 → 1년
+ * - 스마트 드릴다운: 주간 보기에서 특정 날짜 클릭 → 해당 일의 시간별 데이터
+ * - 실시간 폴링: 현재 시간대에서만 자동 업데이트 (태양광센서 특성 반영)
+ * - 일사량 임계값: 태양광 발전 최적화를 위한 알림선
+ * - 통계 계산: 현재 그래프 범위의 평균/최대/최소값
+ * - 타입 안전성: 완전한 TypeScript 지원
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import SolarPresenter from './SolarPresenter';
 import { fetchSolarQuery } from '@/api/solar';
 import { getErrorMessage } from '@/lib/http';
-import { normalizeRows } from '@/lib/time';
 
-// 시간 범위 타입 정의 (백엔드 API 호환)
-type Preset = '15m' | '1h' | '1d' | '1w' | '1mo';
+// 🎯 줌 레벨 타입 정의 (0~5만 허용)
+type ZoomLevel = 0 | 1 | 2 | 3 | 4 | 5;
+type ZoomPreset = '1h' | '1d' | '1w' | '1mo' | '6mo' | '1y';
 
-/**
- * 일사량 통계 정보 타입 정의 (TypeScript 안전성)
- * - useState의 setStats 콜백에서 사용할 타입
- * - 태양광 센서 특화 데이터 구조
- */
-interface SolarStatsData {
-    [key: string]: {
-        avg: number | null;
-        max: number | null;
-        min: number | null;
-        count: number;
-        sum?: number;
-    };
+// 🔧 타입 안전한 줌 설정 매핑 (태양광센서 특성 반영)
+const ZOOM_CONFIGS: Record<ZoomLevel, { preset: ZoomPreset; label: string; days: number; realtime: boolean }> = {
+    0: { preset: '1h', label: '1시간', days: 1 / 24, realtime: true }, // 실시간 일사량 변화 추적
+    1: { preset: '1d', label: '1일', days: 1, realtime: true }, // 일일 태양광 패턴 추적
+    2: { preset: '1w', label: '1주일', days: 7, realtime: false }, // 주간 날씨 패턴 분석 (기본값)
+    3: { preset: '1mo', label: '1달', days: 30, realtime: false }, // 월별 일사량 변화
+    4: { preset: '6mo', label: '6개월', days: 180, realtime: false }, // 계절별 일사량 변화
+    5: { preset: '1y', label: '1년', days: 365, realtime: false }, // 연간 일사량 패턴
+};
+
+// 🔧 줌 레벨 유효성 검사 함수
+function isValidZoomLevel(level: number): level is ZoomLevel {
+    return level >= 0 && level <= 5 && Number.isInteger(level);
+}
+
+// 🔧 안전한 줌 설정 조회 함수
+function getZoomConfig(level: number) {
+    if (!isValidZoomLevel(level)) {
+        console.warn(`잘못된 태양광 줌 레벨: ${level}, 기본값 2 사용`);
+        return ZOOM_CONFIGS[2]; // 기본값: 1주일
+    }
+    return ZOOM_CONFIGS[level];
 }
 
 export default function SolarContainer() {
-    // ============= 상태 관리 (타입 안전성) =============
+    // 🎛️ UI 상태 (타입 안전성 보장)
+    const [deviceId, setDeviceId] = useState<number>(31);
+    const [column, setColumn] = useState<string>('solar'); // 태양광센서는 일사량 하나만
+    const [zoomLevel, setZoomLevel] = useState<ZoomLevel>(2); // 기본값: 1주일 보기
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null); // 드릴다운된 특정 날짜
 
-    // 선택된 장치 ID (태양광 센서 식별자)
-    const [deviceId, setDeviceId] = useState<number>(31); // 기본 태양광 장치
+    // 🚨 태양광 임계값 (일사량 기준)
+    const [peakLimits, setPeakLimits] = useState<Record<string, number>>({
+        solar: 1000.0, // 일사량 1000 W/m² (강한 일사량 기준)
+    });
 
-    // 시간 범위 설정 (기본값: 15분)
-    const [preset, setPreset] = useState<Preset>('15m');
-
-    // 모니터링 모드: 실시간 vs 과거 데이터 조회
-    const [mode, setMode] = useState<'realtime' | 'range'>('realtime');
-
-    // 차트에 표시될 데이터 배열 (시간순 정렬됨)
+    // 📊 데이터 상태
     const [data, setData] = useState<any[]>([]);
-
-    // 통계 정보 (평균, 최대, 최소, 개수) - 타입 안전성
-    const [stats, setStats] = useState<SolarStatsData>({});
-
-    // 에러 메시지 (API 호출 실패시)
+    const [stats, setStats] = useState<any>({});
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
-    // 시스템 활동 로그 (최대 300개 유지)
     const [logs, setLogs] = useState<string[]>([]);
 
-    // 실시간 모드용 타이머 참조
+    // ⏰ 실시간 업데이트용 타이머
     const timer = useRef<number | undefined>(undefined);
-
-    // ============= 유틸리티 함수 =============
-
-    /**
-     * 로그 메시지 추가
-     * - 시간 스탬프와 함께 로그 기록
-     * - 최대 300개까지만 유지 (메모리 절약)
-     */
-    const log = (message: string) => {
-        setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString('ko-KR')}] ${message}`].slice(-300));
-    };
+    const deviceOptions = [31, 32, 33, 34, 35]; // 태양광센서 장치들
 
     /**
-     * 태양광 데이터 통계 계산
-     * - 일사량(irradiance) 값들의 평균/최대/최소/개수 계산
-     * - 유효한 숫자 값만 필터링해서 계산
-     * - 백엔드에서 계산된 통계가 있으면 우선 사용
+     * 📝 로그 기록 함수 (태양광센서 전용 메시지)
      */
-    const recompute = (rows: any[]) => {
-        // 🔄 백엔드 응답에 stats가 포함되어 있으면 우선 사용
-        if (rows.length > 0 && rows[0]._stats) {
-            setStats(rows[0]._stats as SolarStatsData);
-            log('백엔드 태양광 통계 데이터 사용');
-            return;
-        }
+    const log = useCallback((message: string) => {
+        const timestamp = new Date().toLocaleTimeString('ko-KR');
+        setLogs((prev) => [...prev, `${timestamp}: ${message}`].slice(-100));
+    }, []);
 
-        // 📊 프론트엔드에서 직접 계산 (백엔드 solar_router.py와 동일한 로직)
-        // 일사량 데이터 추출 및 필터링 (여러 필드명 지원)
-        const irradiance = rows
-            .map((r) => r.irradiance_w_per_m2 || r.irradiance || r.solar || r.value)
-            .filter((v): v is number => v != null && Number.isFinite(v));
+    /**
+     * 📊 통계 계산 헬퍼 함수 (일사량 특성 반영)
+     */
+    const calculateStats = useCallback((values: number[]) => {
+        const validValues = values.filter((v) => v != null && !isNaN(v));
+        if (!validValues.length) return { avg: 0, max: 0, min: 0, count: 0 };
 
-        /**
-         * 통계 계산 헬퍼 함수
-         * @param arr 숫자 배열
-         * @returns 평균, 최대, 최소, 개수, 합계
-         */
-        const calc = (arr: number[]) =>
-            arr.length
-                ? {
-                      avg: +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(3),
-                      max: Math.max(...arr),
-                      min: Math.min(...arr),
-                      count: arr.length,
-                      sum: arr.reduce((a, b) => a + b, 0),
-                  }
-                : { avg: null, max: null, min: null, count: 0, sum: 0 };
-
-        // 통계 상태 업데이트
-        const newStats: SolarStatsData = {
-            irradiance: calc(irradiance),
-            solar: calc(irradiance), // 레거시 호환성
+        return {
+            avg: validValues.reduce((sum, val) => sum + val, 0) / validValues.length,
+            max: Math.max(...validValues),
+            min: Math.min(...validValues),
+            count: validValues.length,
         };
-
-        setStats(newStats);
-        log(`일사량 통계 계산 완료: ${irradiance.length}개 데이터포인트, 평균 ${newStats.irradiance.avg}W/m²`);
-    };
-
-    // ============= 데이터 조회 함수 =============
+    }, []);
 
     /**
-     * 실시간 일사량 데이터 조회
-     * - 최신 15분간의 데이터를 300개까지 가져옴
-     * - 기존 데이터에 새 데이터를 병합 (중복 제거)
-     * - 백엔드 solar_router.py의 /data/solar/query 엔드포인트 호출
+     * 🔄 데이터 재계산 및 태양광 데이터 처리
+     * 백엔드에서 받은 원본 컬럼명을 사용하기 쉬운 별명으로 매핑
      */
-    const pullOnce = useCallback(async () => {
+    const processData = useCallback(
+        (rawRows: any[]) => {
+            // 🏷️ 태양광센서 데이터 별명 매핑
+            const processedRows = rawRows.map((row) => ({
+                ...row, // 원본 데이터 유지
+
+                // ⏰ 시간 필드를 밀리초로 변환 (차트 X축용)
+                bucket: row.bucket ? new Date(row.bucket).getTime() : Date.now(),
+
+                // ☀️ 태양광센서 별명 (일사량)
+                solar: row.solar || 0,
+            }));
+
+            // 📊 일사량 통계 자동 계산
+            const allStats = {
+                solar: calculateStats(processedRows.map((r) => r.solar)),
+            };
+
+            // 🔄 상태 업데이트
+            setStats(allStats);
+            setData(processedRows);
+        },
+        [calculateStats]
+    );
+
+    /**
+     * 📡 API 호출 함수 (줌 레벨과 선택된 날짜 기반)
+     */
+    const fetchData = useCallback(async () => {
+        setLoading(true);
         try {
-            // 백엔드 API 호출 (15분 범위, 최대 300포인트)
-            const res = await fetchSolarQuery({
+            const config = getZoomConfig(zoomLevel); // 🔧 안전한 설정 조회
+            let apiParams: any = {
                 device_id: deviceId,
-                preset: '15m',
-                max_points: 300,
-            });
+                preset: config.preset,
+                max_points: Math.min(5000, Math.floor(config.days * 48)), // 태양광센서 특성에 맞는 포인트 수
+            };
 
-            // 서버 데이터를 차트 호환 형식으로 변환
-            const rows = normalizeRows(res.data ?? []);
+            // 🗓️ 특정 날짜가 선택된 경우 (드릴다운)
+            if (selectedDate && zoomLevel <= 1) {
+                const dayStart = new Date(selectedDate);
+                dayStart.setHours(0, 0, 0, 0);
+                const dayEnd = new Date(selectedDate);
+                dayEnd.setHours(23, 59, 59, 999);
 
-            if (rows.length) {
-                setData((prev) => {
-                    // 기존 데이터(700개) + 새 데이터 = 최대 1000개 유지
-                    const next = [...prev.slice(-700), ...rows].slice(-1000);
-                    recompute(next);
-                    return next;
-                });
+                apiParams = {
+                    ...apiParams,
+                    start: dayStart.toISOString(),
+                    end: dayEnd.toISOString(),
+                };
+            }
 
-                // 성공 로그 (마지막 일사량 값 표시)
-                const lastRow = rows.at(-1);
-                const lastIrradiance = lastRow?.irradiance_w_per_m2 || lastRow?.solar || 'N/A';
-                log(`실시간 조회 성공 device=${deviceId} ` + `일사량=${lastIrradiance}W/m²`);
+            // 📡 Solar API 호출
+            const response = await fetchSolarQuery(apiParams);
 
-                // 🔄 백엔드에서 계산된 통계도 함께 사용
-                if (res.stats) {
-                    setStats((prevStats: SolarStatsData) => ({
-                        ...prevStats,
-                        ...(res.stats as SolarStatsData),
-                    }));
-                    log('백엔드 일사량 통계 정보 병합 완료');
-                }
+            if (response.data && response.data.length > 0) {
+                processData(response.data);
+                log(`✅ ${config.label} 태양광 데이터 ${response.data.length}개 로드됨 (센서 ${deviceId})`);
             } else {
                 setData([]);
                 setStats({});
-                log(`실시간 조회 - 데이터 없음 device=${deviceId}`);
+                log(`⚠️ ${config.label} 태양광 데이터 없음 (센서 ${deviceId})`);
             }
 
             setError(null);
-        } catch (e) {
-            const msg = getErrorMessage(e);
-            setError(msg);
-            log(`실시간 조회 실패: ${msg}`);
-
-            // 네트워크 에러시 재시도 알림
-            if (msg.includes('NetworkError') || msg.includes('fetch')) {
-                log('태양광 센서 네트워크 에러 감지');
-            }
+        } catch (err) {
+            const errorMessage = getErrorMessage(err);
+            setError(errorMessage);
+            log(`❌ 태양광 데이터 로드 실패: ${errorMessage}`);
+        } finally {
+            setLoading(false);
         }
-    }, [deviceId]);
+    }, [deviceId, zoomLevel, selectedDate, processData, log]);
 
     /**
-     * 범위 일사량 데이터 조회 (과거 데이터)
-     * - 사용자가 선택한 기간(preset)의 데이터 조회
-     * - 태양광 효율성 분석 및 일변화 패턴 파악용
+     * 🔍 줌 인 (확대) - 타입 안전성 보장
      */
-    const queryRange = useCallback(async () => {
-        try {
-            const res = await fetchSolarQuery({
-                device_id: deviceId,
-                preset,
-                max_points: 2000,
-            });
-
-            const rows = normalizeRows(res.data ?? []);
-            setData(rows);
-            recompute(rows);
-
-            log(`범위 조회 성공 device=${deviceId} 기간=${preset} 개수=${rows.length}`);
-
-            // 백엔드 통계 정보 활용
-            if (res.stats) {
-                setStats((prevStats: SolarStatsData) => ({
-                    ...prevStats,
-                    ...(res.stats as SolarStatsData),
-                }));
-                log('범위 조회 - 백엔드 일사량 통계 정보 적용');
-            }
-
-            setError(null);
-        } catch (e) {
-            const msg = getErrorMessage(e);
-            setError(msg);
-            setData([]);
-            setStats({});
-            log(`범위 조회 실패: ${msg}`);
+    const handleZoomIn = useCallback(() => {
+        if (zoomLevel > 0) {
+            const newLevel = (zoomLevel - 1) as ZoomLevel; // 🔧 타입 캐스팅
+            setZoomLevel(newLevel);
+            setSelectedDate(null);
+            const config = getZoomConfig(newLevel);
+            log(`🔍 태양광 확대: ${config.label} 범위로 전환`);
         }
-    }, [preset, deviceId]);
-
-    // ============= 생명주기 관리 =============
+    }, [zoomLevel, log]);
 
     /**
-     * 실시간 모드 폴링 관리
-     * - 실시간 모드일 때만 2초마다 자동 갱신
-     * - 태양광 데이터는 전력보다 변화가 느려서 2초가 적합
+     * 🔍 줌 아웃 (축소) - 타입 안전성 보장
+     */
+    const handleZoomOut = useCallback(() => {
+        if (zoomLevel < 5) {
+            const newLevel = (zoomLevel + 1) as ZoomLevel; // 🔧 타입 캐스팅
+            setZoomLevel(newLevel);
+            setSelectedDate(null);
+            const config = getZoomConfig(newLevel);
+            log(`🔍 태양광 축소: ${config.label} 범위로 전환`);
+        }
+    }, [zoomLevel, log]);
+
+    /**
+     * 🖱️ 차트 클릭 드릴다운 (태양광센서 특성 반영)
+     */
+    const handleDataPointClick = useCallback(
+        (dataPoint: any, timeMs: number) => {
+            const clickedDate = new Date(timeMs);
+
+            if (zoomLevel === 2) {
+                // 1주일 → 1일 (일별 태양광 패턴 분석)
+                setZoomLevel(1);
+                setSelectedDate(clickedDate);
+                log(`📅 ${clickedDate.toLocaleDateString('ko-KR')} 태양광 일별 패턴으로 드릴다운`);
+            } else if (zoomLevel === 3) {
+                // 1달 → 1주일 (주별 날씨 패턴 분석)
+                setZoomLevel(2);
+                const monday = new Date(clickedDate);
+                monday.setDate(clickedDate.getDate() - clickedDate.getDay() + 1);
+                setSelectedDate(monday);
+                log(`📊 ${monday.toLocaleDateString('ko-KR')} 태양광 주간 패턴으로 드릴다운`);
+            } else if (zoomLevel === 1) {
+                // 1일 → 1시간 (시간별 일사량 변화)
+                setZoomLevel(0);
+                setSelectedDate(clickedDate);
+                log(`🕐 ${clickedDate.toLocaleString('ko-KR')} 태양광 시간별 변화로 드릴다운`);
+            }
+            // 더 높은 레벨에서는 드릴다운하지 않음 (연간/반년 데이터는 개요용)
+        },
+        [zoomLevel, log]
+    );
+
+    /**
+     * ⏰ 실시간 폴링 및 데이터 로드 관리 (태양광센서 특성 반영)
      */
     useEffect(() => {
-        // 기존 타이머 정리
-        if (timer.current) {
-            window.clearInterval(timer.current);
-            timer.current = undefined;
-        }
+        window.clearInterval(timer.current);
 
-        if (mode === 'realtime') {
-            // 즉시 한 번 조회
-            pullOnce();
+        const config = getZoomConfig(zoomLevel); // 🔧 안전한 설정 조회
 
-            // 2초마다 자동 갱신
-            timer.current = window.setInterval(() => {
-                pullOnce();
-            }, 2000);
+        // 초기 데이터 로드
+        fetchData();
 
-            log('태양광 실시간 모드 시작 - 2초 간격 자동 갱신');
+        // 실시간 업데이트 설정 (태양광센서는 낮에만 의미 있음)
+        if (config.realtime) {
+            // 태양광센서는 업데이트 주기가 더 길어도 됨 (일사량 변화가 전력보다 느림)
+            const updateInterval = zoomLevel === 0 ? 15000 : 45000; // 1시간=15초, 1일=45초
+            timer.current = window.setInterval(fetchData, updateInterval);
+            log(`🔴 태양광센서 실시간 업데이트 시작 (${updateInterval / 1000}초 간격)`);
         } else {
-            log('태양광 실시간 모드 중지');
+            log(`📊 ${config.label} 정적 모드 (태양광 분석용)`);
         }
 
-        // 컴포넌트 정리시 타이머 해제
-        return () => {
-            if (timer.current) {
-                window.clearInterval(timer.current);
-                timer.current = undefined;
-                log('태양광 타이머 정리 완료');
-            }
-        };
-    }, [mode, pullOnce]);
+        // 컴포넌트 언마운트 시 타이머 정리
+        return () => window.clearInterval(timer.current);
+    }, [zoomLevel, fetchData, log]);
 
-    // 컴포넌트 초기화 로그
-    useEffect(() => {
-        log(`SolarContainer 초기화 - 태양광 장치 ID: ${deviceId}`);
+    /**
+     * 🔄 수동 새로고침 (태양광센서 전용 메시지)
+     */
+    const handleManualRefresh = useCallback(() => {
+        const config = getZoomConfig(zoomLevel);
+        log(`🔄 ${config.label} 태양광 데이터 수동 새로고침 시작`);
+        fetchData();
+    }, [fetchData, zoomLevel, log]);
 
-        return () => {
-            log('SolarContainer 정리 중...');
-        };
-    }, [deviceId]);
+    // 🎯 현재 줌 설정 조회
+    const currentZoomConfig = getZoomConfig(zoomLevel);
 
-    // ============= UI 렌더링 =============
-
+    // 📊 Presenter에 전달할 props 구성 (SolarPresenter와 완전 호환)
     return (
         <SolarPresenter
-            // 장치 관리
+            // 장치 및 컬럼 선택
             deviceId={deviceId}
             setDeviceId={setDeviceId}
-            deviceOptions={[31, 32, 33]} // 사용 가능한 태양광 장치 목록
-            // 시간 범위 및 모드 설정
-            preset={preset}
-            setPreset={setPreset}
-            mode={mode}
-            setMode={setMode}
-            // 수동 새로고침 함수
-            onQuery={mode === 'realtime' ? pullOnce : queryRange}
-            // 차트 및 UI에 전달할 데이터
-            data={data} // 시계열 일사량 데이터 배열
-            stats={stats} // 통계 정보 (평균/최대/최소 일사량)
-            error={error} // 에러 메시지 (있을 경우)
-            logs={logs} // 시스템 활동 로그
+            deviceOptions={deviceOptions}
+            column={column}
+            setColumn={setColumn}
+            // 줌 컨트롤
+            zoomLevel={zoomLevel}
+            zoomLabel={currentZoomConfig.label} // 🔧 안전한 라벨 조회
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            canZoomIn={zoomLevel > 0}
+            canZoomOut={zoomLevel < 5}
+            // 차트 인터랙션
+            onDataPointClick={handleDataPointClick}
+            onManualRefresh={handleManualRefresh}
+            // 데이터와 상태
+            data={data}
+            stats={stats}
+            loading={loading}
+            error={error}
+            logs={logs}
+            // 태양광 임계값
+            peakLimits={peakLimits}
+            setPeakLimits={setPeakLimits}
         />
     );
 }
