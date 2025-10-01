@@ -1,102 +1,42 @@
 // src/api/solar.ts
 /**
  * 태양광 센서 API 클라이언트 - 백엔드 호환성 보장
- * 
+ *
  * 주요 기능:
  * - fetchSolarQuery(): 일사량 시계열 데이터 조회
  * - 백엔드 solar_router.py와 완벽 호환
  * - 방어적 파싱으로 안정성 보장
  * - 드릴다운 차트 지원을 위한 데이터 정규화
- * 
+ *
  * 측정 데이터:
  * - solar: 일사량 (W/m²) - 백엔드 API 호환 필드명
  * - device_id: 태양광 센서 장치 ID
  */
-
 import { fetchJSON } from "@/lib/http";
-
-/**
- * 태양광 조회 파라미터 타입
- */
-export interface SolarQueryParams {
-    preset?: string; // 시간 범위 ('15m', '1h', '1d', '1w', '1mo')
-    max_points?: number; // 최대 데이터 포인트 수
-    start?: string; // 시작 시간 (ISO 문자열)
-    end?: string; // 종료 시간 (ISO 문자열)
-    device_id?: number; // 장치 ID (31, 32, 33 등)
-}
-
-/**
- * 태양광 데이터 포인트 타입 - 백엔드 API 호환
- */
-export interface SolarDataPoint {
-    bucket: string | null; // KST 타임스탬프 (ISO 문자열)
-    solar: number | null; // ✅ 일사량 (W/m²) - 백엔드 API 호환 필드명
-    device_id: number | null; // 장치 ID
-}
-
-/**
- * 태양광 통계 정보 타입 - 백엔드 API 호환
- */
-export interface SolarStats {
-    solar?: { // ✅ 백엔드 API 호환 필드명
-        avg: number | null;
-        max: number | null;
-        min: number | null;
-        count: number;
-    };
-}
-
-/**
- * 태양광 쿼리 응답 타입
- */
-export interface SolarQueryResponse {
-    window_start: string | null;
-    window_end: string | null;
-    bucket_label: string;
-    series: string[]; // ["solar"] - 백엔드 API 호환
-    data: SolarDataPoint[];
-    stats: SolarStats;
-    error?: string;
-}
-
-/**
- * 실시간 태양광 데이터 타입
- */
-export interface SolarRealtimeResponse {
-    timestamp: string | null;
-    data: {
-        [deviceId: string]: {
-            solar: number | null; // ✅ 백엔드 API 호환 필드명
-        };
-    };
-    error?: string;
-}
-
 /**
  * 일사량 시계열 데이터 조회
- * 
+ *
  * @param params 조회 파라미터
  * @returns 일사량 데이터 및 통계
  */
-export async function fetchSolarQuery(params: SolarQueryParams): Promise<SolarQueryResponse> {
+export async function fetchSolarQuery(params) {
     const queryParams = new URLSearchParams();
-
     // 파라미터 설정
-    if (params.preset) queryParams.set('preset', params.preset);
-    if (params.start) queryParams.set('start', params.start);
-    if (params.end) queryParams.set('end', params.end);
-    if (params.max_points) queryParams.set('max_points', params.max_points.toString());
-    if (params.device_id) queryParams.set('device_id', params.device_id.toString());
-
+    if (params.preset)
+        queryParams.set('preset', params.preset);
+    if (params.start)
+        queryParams.set('start', params.start);
+    if (params.end)
+        queryParams.set('end', params.end);
+    if (params.max_points)
+        queryParams.set('max_points', params.max_points.toString());
+    if (params.device_id)
+        queryParams.set('device_id', params.device_id.toString());
     const url = `/data/solar/query?${queryParams.toString()}`;
-
     try {
-        const response = await fetchJSON<SolarQueryResponse>(url);
-
+        const response = await fetchJSON(url);
         // ✅ 백엔드 응답을 그대로 사용 (변환 불필요)
         // 백엔드에서 이미 solar 필드로 응답하므로 데이터 변환 제거
-
         // 방어적 파싱 - 기본값 설정
         if (!response.stats) {
             response.stats = {};
@@ -109,12 +49,10 @@ export async function fetchSolarQuery(params: SolarQueryParams): Promise<SolarQu
                 count: 0
             };
         }
-
         return response;
-
-    } catch (error) {
+    }
+    catch (error) {
         console.error('fetchSolarQuery failed:', error);
-
         // 에러 시 기본 응답 반환
         return {
             window_start: null,
@@ -129,32 +67,27 @@ export async function fetchSolarQuery(params: SolarQueryParams): Promise<SolarQu
         };
     }
 }
-
 /**
  * 최신 일사량 데이터 조회 (실시간)
- * 
+ *
  * @param deviceId 특정 장치 ID (선택적)
  * @returns 실시간 일사량 데이터
  */
-export async function fetchSolarRealtime(deviceId?: number): Promise<SolarRealtimeResponse> {
+export async function fetchSolarRealtime(deviceId) {
     const queryParams = new URLSearchParams();
-    if (deviceId) queryParams.set('device_id', deviceId.toString());
-
+    if (deviceId)
+        queryParams.set('device_id', deviceId.toString());
     const url = `/data/solar/realtime?${queryParams.toString()}`;
-
     try {
-        const response = await fetchJSON<SolarRealtimeResponse>(url);
-
+        const response = await fetchJSON(url);
         // 방어적 파싱
         if (!response.data) {
             response.data = {};
         }
-
         return response;
-
-    } catch (error) {
+    }
+    catch (error) {
         console.error('fetchSolarRealtime failed:', error);
-
         return {
             timestamp: null,
             data: {},
@@ -162,28 +95,25 @@ export async function fetchSolarRealtime(deviceId?: number): Promise<SolarRealti
         };
     }
 }
-
 /**
  * 일사량 데이터 검증 함수
  */
-export function isValidSolar(value: any): value is number {
+export function isValidSolar(value) {
     return typeof value === 'number' && !isNaN(value) && value >= 0;
 }
-
 /**
  * 일사량 단위 변환 헬퍼
  */
 export const SOLAR_UNITS = {
     W_PER_M2: 'W/m²',
     KW_PER_M2: 'kW/m²',
-} as const;
-
+};
 /**
  * 일사량 값을 포맷팅
  */
-export function formatSolar(value: number | null, unit: keyof typeof SOLAR_UNITS = 'W_PER_M2'): string {
-    if (value === null || value === undefined) return '-';
-
+export function formatSolar(value, unit = 'W_PER_M2') {
+    if (value === null || value === undefined)
+        return '-';
     switch (unit) {
         case 'W_PER_M2':
             return `${value.toFixed(1)} ${SOLAR_UNITS.W_PER_M2}`;
@@ -193,7 +123,6 @@ export function formatSolar(value: number | null, unit: keyof typeof SOLAR_UNITS
             return `${value.toFixed(1)} W/m²`;
     }
 }
-
 // ✅ 기존 코드와의 호환성을 위한 별칭
 export const isValidIrradiance = isValidSolar;
 export const IRRADIANCE_UNITS = SOLAR_UNITS;
