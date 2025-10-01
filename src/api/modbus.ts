@@ -5,7 +5,7 @@
 import { fetchJSON } from '@/lib/http';
 
 export interface ModbusQueryParams {
-    preset?: '1h' | '1d' | '1w' | '1mo';
+    preset?: '10s' | '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
     maxpoints?: number;
     start?: string;
     end?: string;

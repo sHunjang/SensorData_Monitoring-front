@@ -1,11 +1,25 @@
-// src/pages/env/EnvPresenter.tsx
+/**
+ * EnvPresenter.tsx
+ * - Modbus 페이지 UI 패턴에 맞춘 Env(온도/습도) Presenter
+ * - 역할: UI 렌더링 전담. 상태/로직은 Container에서 제공.
+ *
+ * 주요 특징:
+ * - 헤더: 장치, 현재값, 서브타이틀(항목 + 줌 라벨)
+ * - 컨트롤: 장치 선택, 항목 선택(온도/습도), 줌 인/아웃, 수동 새로고침
+ * - 차트: LineChartWrapper 사용, preset 전달로 X축 포맷 제어
+ * - 통계: 평균/최대/최소/샘플 수
+ * - 로그 패널
+ *
+ * 주의: Presenter는 데이터 포맷({ bucket: ISOstring, temperature, humidity })을 기대.
+ */
+
 import React from 'react';
 import LineChartWrapper from '@/components/charts/LineChartWrapper';
 import styles from './Env.module.css';
 
 type Stat = { avg: number | null; max: number | null; min: number | null; count: number };
-
 type Column = 'temperature' | 'humidity';
+type Preset = '10s' | '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
 
 type Props = {
     deviceId: number;
@@ -14,135 +28,127 @@ type Props = {
     column: Column;
     setColumn: (c: Column) => void;
 
-    zoomLevel: number;
+    zoomLevel: number; // 0..6
     zoomLabel: string;
+    preset?: Preset; // Container가 제공하면 우선 사용
+
     onZoomIn: () => void;
     onZoomOut: () => void;
     canZoomIn: boolean;
     canZoomOut: boolean;
 
-    onDataPointClick: (d: any, t: number) => void;
+    onDataPointClick?: (d: any, t: number) => void;
     onManualRefresh: () => void;
 
-    data: Array<{ bucket: number; temperature?: number | null; humidity?: number | null }>;
+    data: Array<{ bucket: string | number; temperature?: number | null; humidity?: number | null }>;
     stats: Record<Column, Stat>;
     loading: boolean;
     error: string | null;
     logs: string[];
 
     peakLimits: Record<string, number>;
-    setPeakLimits: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+    setPeakLimits: (p: Record<string, number>) => void;
 };
 
-const LABELS: Record<Column, string> = { temperature: 'Temperature', humidity: 'Humidity' };
+const LABELS: Record<Column, string> = { temperature: '온도', humidity: '습도' };
 const UNITS: Record<Column, string> = { temperature: '°C', humidity: '%' };
 
-export default function EnvPresenter(props: Props) {
-    const {
-        deviceId,
-        setDeviceId,
-        deviceOptions,
-        column,
-        setColumn,
-        zoomLevel,
-        zoomLabel,
-        onZoomIn,
-        onZoomOut,
-        canZoomIn,
-        canZoomOut,
-        onDataPointClick,
-        onManualRefresh,
-        data,
-        stats,
-        loading,
-        error,
-        logs,
-        peakLimits,
-        setPeakLimits,
-    } = props;
+export default function EnvPresenter({
+    deviceId,
+    setDeviceId,
+    deviceOptions,
+    column,
+    setColumn,
+    zoomLevel,
+    zoomLabel,
+    preset,
+    onZoomIn,
+    onZoomOut,
+    canZoomIn,
+    canZoomOut,
+    onDataPointClick,
+    onManualRefresh,
+    data,
+    stats,
+    loading,
+    error,
+    logs,
+    peakLimits,
+    setPeakLimits,
+}: Props) {
+    // 로딩/에러 우선 처리
+    if (loading)
+        return (
+            <div className={styles.container}>
+                <div className={styles.content}>로딩 중...</div>
+            </div>
+        );
+    if (error)
+        return (
+            <div className={styles.container}>
+                <div className={styles.content} style={{ padding: 16, color: '#f87171' }}>
+                    {error}
+                </div>
+            </div>
+        );
 
-    // 현재/이전 값, 증감/증감률
-    const last = data.length ? data[data.length - 1] : null;
-    const prev = data.length > 1 ? data[data.length - 2] : null;
+    // 최근값 / 이전값, delta 계산
+    const last = data?.length ? data[data.length - 1] : null;
+    const prev = data?.length > 1 ? data[data.length - 2] : null;
     const currentValue = (last?.[column] ?? null) as number | null;
     const previousValue = (prev?.[column] ?? null) as number | null;
 
     const delta = currentValue != null && previousValue != null ? currentValue - previousValue : 0;
     const changePct =
-        currentValue != null && previousValue && Number.isFinite(previousValue)
-            ? ((delta / previousValue) * 100).toFixed(2)
-            : '0.00';
+        previousValue && Number.isFinite(previousValue)
+            ? `${((delta / previousValue) * 100 || 0).toFixed(2)}%`
+            : '0.00%';
 
-    const fmt = (v: number | null, digits = 1) =>
-        typeof v === 'number' && Number.isFinite(v) ? v.toFixed(digits) : '-';
+    const fmt = (v: number | null, d = 1) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(d) : '-');
 
-    // 임계값 편집/삭제
+    // 임계값(peak) 편집 핸들러 (간단)
     const currentPeakLimit = peakLimits[column];
     const handlePeakLimitChange = (raw: string) => {
         const n = parseFloat(raw);
         if (!isNaN(n) && Number.isFinite(n)) {
-            setPeakLimits((old) => ({ ...old, [column]: n }));
+            setPeakLimits({ ...peakLimits, [column]: n });
         }
     };
     const handlePeakLimitRemove = () => {
-        setPeakLimits((old) => {
-            const next = { ...old };
-            delete next[column];
-            return next;
-        });
+        const copy = { ...peakLimits };
+        delete copy[column];
+        setPeakLimits(copy);
     };
-
-    // 상태 뱃지(예시)
-    const statusBadge = (() => {
-        const v = currentValue ?? 0;
-        if (column === 'temperature') {
-            if (v >= 35) return { text: '고온경보', color: '#f6465d', icon: '🔥' };
-            if (v >= 30) return { text: '고온주의', color: '#f7931e', icon: '🌡️' };
-            if (v >= 20) return { text: '적정온도', color: '#0ecb81', icon: '✅' };
-            if (v >= 10) return { text: '저온주의', color: '#f7931e', icon: '❄️' };
-            return { text: '저온경보', color: '#f6465d', icon: '🧊' };
-        } else {
-            if (v >= 80) return { text: '고습경보', color: '#f6465d', icon: '💧' };
-            if (v >= 70) return { text: '고습주의', color: '#f7931e', icon: '🌫️' };
-            if (v >= 40) return { text: '적정습도', color: '#0ecb81', icon: '✅' };
-            if (v >= 30) return { text: '건조주의', color: '#f7931e', icon: '🏜️' };
-            return { text: '건조경보', color: '#f6465d', icon: '🔥' };
-        }
-    })();
 
     const currentStat = stats[column];
 
     return (
         <div className={styles.container}>
             <div className={styles.content}>
-                {/* 헤더 */}
+                {/* Header */}
                 <div className={styles.header}>
                     <div>
                         <h1 className={styles.title}>ENV SENSOR {deviceId}</h1>
                         <p className={styles.subtitle}>
-                            {LABELS[column]} / {zoomLabel}
+                            {LABELS[column]} · {zoomLabel}
                         </p>
                     </div>
                     <div className={styles.priceInfo}>
                         <p className={styles.currentPrice}>
-                            {fmt(currentValue)} {UNITS[column]}
+                            {fmt(currentValue)} <span style={{ fontSize: 12 }}>{UNITS[column]}</span>
                         </p>
-                        <p className={`${styles.priceChange} ${delta < 0 ? styles.priceChangeNegative : ''}`}>
-                            <span>{delta >= 0 ? '📈' : '📉'}</span>
-                            <span>{changePct}%</span>
-                            <span>
-                                ({delta >= 0 ? '+' : ''}
-                                {fmt(delta)})
-                            </span>
+                        <p className={styles.priceChange}>
+                            <span>{delta >= 0 ? '▲' : '▼'}</span> {changePct} ({delta >= 0 ? '+' : ''}
+                            {fmt(delta)})
                         </p>
                     </div>
                 </div>
 
-                {/* 컨트롤 */}
+                {/* Controls */}
                 <div className={styles.controls}>
                     <div className={styles.controlsGrid}>
                         <div className={styles.controlGroup}>
-                            <label>환경센서</label>
+                            <label>Device ID</label>
                             <select value={deviceId} onChange={(e) => setDeviceId(Number(e.target.value))}>
                                 {deviceOptions.map((id) => (
                                     <option key={id} value={id}>
@@ -153,7 +159,7 @@ export default function EnvPresenter(props: Props) {
                         </div>
 
                         <div className={styles.controlGroup}>
-                            <label>측정 항목</label>
+                            <label>항목</label>
                             <select value={column} onChange={(e) => setColumn(e.target.value as Column)}>
                                 <option value="temperature">🌡️ 온도 (°C)</option>
                                 <option value="humidity">💧 습도 (%)</option>
@@ -161,80 +167,44 @@ export default function EnvPresenter(props: Props) {
                         </div>
 
                         <div className={styles.controlGroup}>
-                            <label>🔍 시간 범위</label>
-                            <div style={{ display: 'flex', gap: 6 }}>
-                                <button
-                                    onClick={onZoomIn}
-                                    disabled={!canZoomIn}
-                                    title={canZoomIn ? '더 확대' : '최대 확대됨'}
-                                >
-                                    🔍+ 확대
+                            <label>Zoom</label>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={onZoomIn} disabled={!canZoomIn}>
+                                    ➕ In
                                 </button>
-                                <button
-                                    onClick={onZoomOut}
-                                    disabled={!canZoomOut}
-                                    title={canZoomOut ? '더 축소' : '최대 축소됨'}
-                                >
-                                    🔍- 축소
+                                <button onClick={onZoomOut} disabled={!canZoomOut}>
+                                    ➖ Out
                                 </button>
                             </div>
                         </div>
 
                         <div className={styles.controlGroup}>
-                            <label>📊 현재 보기</label>
-                            <div
-                                style={{
-                                    padding: '8px 12px',
-                                    background: '#2b2f36',
-                                    border: `2px solid ${zoomLevel <= 1 ? '#26a69a' : '#f7931e'}`,
-                                    borderRadius: 4,
-                                    color: zoomLevel <= 1 ? '#26a69a' : '#f7931e',
-                                    fontSize: 12,
-                                    textAlign: 'center',
-                                    fontWeight: 600,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: 6,
-                                }}
-                            >
-                                {zoomLevel <= 1 && <span>🔴</span>}
-                                📅 {zoomLabel}
-                                {zoomLevel <= 1 && <span>(실시간)</span>}
-                            </div>
-                        </div>
-
-                        <div className={styles.controlGroup}>
-                            <label>🚨 환경 임계값 ({UNITS[column]})</label>
+                            <label>임계값 ({UNITS[column]})</label>
                             <input
                                 type="number"
                                 step={column === 'temperature' ? '0.1' : '1'}
                                 value={currentPeakLimit ?? ''}
                                 onChange={(e) => handlePeakLimitChange(e.target.value)}
-                                placeholder={column === 'temperature' ? '온도 임계값' : '습도 임계값'}
+                                placeholder={`예: ${column === 'temperature' ? '30.0' : '80'}`}
                                 style={{
                                     background: '#2b2f36',
                                     border: '1px solid #2e3238',
                                     color: '#f7f8fa',
-                                    padding: '8px 12px',
-                                    borderRadius: 4,
-                                    fontSize: 12,
+                                    padding: '8px',
                                 }}
                             />
                         </div>
 
                         <div className={styles.controlGroup}>
                             <label>&nbsp;</label>
-                            <div style={{ display: 'flex', gap: 6 }}>
-                                <button onClick={onManualRefresh} disabled={loading} style={{ flex: 1, fontSize: 11 }}>
-                                    🔄 새로고침
-                                </button>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={onManualRefresh}>🔄 Refresh</button>
                                 {currentPeakLimit != null && (
                                     <button
                                         onClick={handlePeakLimitRemove}
-                                        style={{ flex: 1, background: '#f6465d', borderColor: '#f6465d', fontSize: 11 }}
+                                        style={{ background: '#f6465d', color: '#fff' }}
                                     >
-                                        🗑️ 제거
+                                        🗑️ Remove
                                     </button>
                                 )}
                             </div>
@@ -242,22 +212,12 @@ export default function EnvPresenter(props: Props) {
                     </div>
                 </div>
 
-                {/* 에러 배너 */}
+                {/* Error banner */}
                 {error && (
-                    <div
-                        style={{
-                            padding: 12,
-                            background: '#f87171',
-                            color: '#fff',
-                            borderRadius: 8,
-                            marginBottom: 8,
-                        }}
-                    >
-                        {error}
-                    </div>
+                    <div style={{ padding: 12, background: '#f87171', color: '#fff', borderRadius: 8 }}>{error}</div>
                 )}
 
-                {/* 차트 */}
+                {/* Chart */}
                 <div className={styles.chartSection}>
                     <div className={styles.chartToolbar}>
                         <div className={styles.chartTitle}>
@@ -265,19 +225,9 @@ export default function EnvPresenter(props: Props) {
                         </div>
                         <div className={styles.chartControls}>
                             <span style={{ fontSize: 11, color: '#94a3b8' }}>Points: {data.length}</span>
-                            {zoomLevel >= 2 && (
-                                <span style={{ fontSize: 11, color: '#26a69a', fontWeight: 600, marginLeft: 8 }}>
-                                    • 🖱️ 클릭으로 드릴다운 가능
-                                </span>
-                            )}
                             {currentPeakLimit != null && (
-                                <span style={{ fontSize: 11, color: '#f6465d', fontWeight: 600, marginLeft: 8 }}>
-                                    • 🚨 임계값: {currentPeakLimit} {UNITS[column]}
-                                </span>
+                                <span style={{ marginLeft: 8, color: '#f6465d' }}>Limit: {currentPeakLimit}</span>
                             )}
-                            <span style={{ fontSize: 11, color: '#f7931e', fontWeight: 600, marginLeft: 8 }}>
-                                • 범위: {zoomLabel}
-                            </span>
                         </div>
                     </div>
 
@@ -286,72 +236,52 @@ export default function EnvPresenter(props: Props) {
                         keys={[column]}
                         labels={{ [column]: `${LABELS[column]} (${UNITS[column]})` }}
                         xKey="bucket"
+                        // preset이 있으면 우선 사용. 없으면 zoomLevel 매핑.
+                        zoomLevel={preset ? undefined : zoomLevel}
+                        preset={preset}
+                        peakLimit={currentPeakLimit}
+                        peakLimitLabel={
+                            currentPeakLimit
+                                ? `${LABELS[column]} 임계값: ${currentPeakLimit}${UNITS[column]}`
+                                : undefined
+                        }
                         onDataPointClick={onDataPointClick}
-                        zoomLevel={zoomLevel}
+                        csvExport={{
+                            apiPath: '/data/env/query',
+                            extraParams: { deviceid: deviceId },
+                            filePrefix: `env-${deviceId}-${column}-${zoomLabel}`,
+                        }}
+                        height={420}
                     />
                 </div>
 
-                {/* 통계 */}
+                {/* Stats grid */}
                 <div className={styles.statsGrid}>
                     <div className={styles.statCard}>
-                        <div className={styles.statLabel}>현재값</div>
-                        <div className={styles.statValue}>{fmt(currentValue)}</div>
-                        <div className={`${styles.statChange} ${delta < 0 ? styles.statChangeNegative : ''}`}>
-                            {delta >= 0 ? '+' : ''}
-                            {fmt(delta)} {UNITS[column]}
-                        </div>
+                        <div className={styles.statLabel}>평균</div>
+                        <div className={styles.statValue}>{fmt(currentStat.avg)}</div>
                     </div>
-
                     <div className={styles.statCard}>
-                        <div className={styles.statLabel}>평균 ({zoomLabel})</div>
-                        <div className={styles.statValue}>{fmt(currentStat?.avg)}</div>
-                        <div className={styles.statChange}>평균 {UNITS[column]}</div>
+                        <div className={styles.statLabel}>최대</div>
+                        <div className={styles.statValue}>{fmt(currentStat.max)}</div>
                     </div>
-
                     <div className={styles.statCard}>
-                        <div className={styles.statLabel}>최고값 ({zoomLabel})</div>
-                        <div className={styles.statValue}>{fmt(currentStat?.max)}</div>
-                        <div className={styles.statChange}>최고값</div>
+                        <div className={styles.statLabel}>최소</div>
+                        <div className={styles.statValue}>{fmt(currentStat.min)}</div>
                     </div>
-
                     <div className={styles.statCard}>
-                        <div className={styles.statLabel}>최저값 ({zoomLabel})</div>
-                        <div className={styles.statValue}>{fmt(currentStat?.min)}</div>
-                        <div className={styles.statChange}>최저값</div>
+                        <div className={styles.statLabel}>샘플 수</div>
+                        <div className={styles.statValue}>{currentStat.count ?? 0}</div>
                     </div>
-
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>측정 횟수</div>
-                        <div className={styles.statValue}>{currentStat?.count ?? 0}</div>
-                        <div className={styles.statChange}>회</div>
-                    </div>
-
-                    {currentPeakLimit != null && (
-                        <div className={styles.statCard}>
-                            <div className={styles.statLabel}>임계값 상태</div>
-                            <div
-                                className={styles.statValue}
-                                style={{
-                                    color:
-                                        currentValue != null && currentValue > currentPeakLimit ? '#f6465d' : '#0ecb81',
-                                }}
-                            >
-                                {currentValue != null && currentValue > currentPeakLimit ? '⚠️' : '✅'}
-                            </div>
-                            <div className={styles.statChange}>
-                                {currentValue != null && currentValue > currentPeakLimit ? '임계값 초과' : '정상 범위'}
-                            </div>
-                        </div>
-                    )}
                 </div>
 
-                {/* 로그 */}
+                {/* Logs */}
                 <div className={styles.logPanel}>
-                    <div className={styles.logHeader}>🌡️ 환경센서 활동 로그</div>
+                    <div className={styles.logHeader}>📜 Activity Log</div>
                     {logs.length ? (
-                        logs.slice(-20).map((log, i) => (
+                        logs.slice(-20).map((l, i) => (
                             <div key={i} className={styles.logItem}>
-                                {log}
+                                {l}
                             </div>
                         ))
                     ) : (

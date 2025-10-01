@@ -1,16 +1,4 @@
 // src/components/charts/LineChartWrapper.tsx
-/**
- * LineChartWrapper - 공통 라인 차트 래퍼 컴포넌트
- *
- * 주요 기능:
- * - 4단계 줌 레벨별 X축 라벨 포맷터 (1시간, 1일, 1주일, 1달)
- * - Y축 자동 범위 조정 (데이터 값에 맞춰)
- * - 피크 라임 (임계값) 표시
- * - 데이터 포인트 클릭 시 드릴다운
- * - CSV 다운로드 기능
- * - 반응형 디자인 지원
- */
-
 import React, { useMemo, useCallback } from 'react';
 import {
     ResponsiveContainer,
@@ -25,17 +13,28 @@ import {
 } from 'recharts';
 import CsvDownloader from '../common/CsvDownloader';
 
-// 줌 레벨별 X축 포맷터 설정
-const ZOOM_FORMATTERS = {
-    0: {
-        // 1시간 (1분 간격): HH:mm 형태
-        format: (ms: number) =>
+type Preset = '10s' | '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
+
+const PRESET_FORMATTERS: Record<
+    Preset,
+    {
+        format: (ms: number) => string;
+        tooltip: (ms: number) => string;
+        name: string;
+        rotateLabel?: boolean;
+        height?: number;
+    }
+> = {
+    '10s': {
+        // 초 단위: HH:mm:ss
+        format: (ms) =>
             new Intl.DateTimeFormat('ko-KR', {
                 hour: '2-digit',
                 minute: '2-digit',
+                second: '2-digit',
                 timeZone: 'Asia/Seoul',
             }).format(new Date(ms)),
-        tooltip: (ms: number) =>
+        tooltip: (ms) =>
             new Date(ms).toLocaleString('ko-KR', {
                 timeZone: 'Asia/Seoul',
                 year: 'numeric',
@@ -43,20 +42,44 @@ const ZOOM_FORMATTERS = {
                 day: '2-digit',
                 hour: '2-digit',
                 minute: '2-digit',
+                second: '2-digit',
             }),
-        name: '1시간 (1분 간격)',
+        name: '10초',
+        rotateLabel: true,
+        height: 60,
     },
-    1: {
-        // 1일 (실시간): MM/dd HH:mm 형태
-        format: (ms: number) =>
+    '1m': {
+        // 1분: HH:mm:ss (show seconds)
+        format: (ms) =>
             new Intl.DateTimeFormat('ko-KR', {
-                month: '2-digit',
-                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                timeZone: 'Asia/Seoul',
+            }).format(new Date(ms)),
+        tooltip: (ms) =>
+            new Date(ms).toLocaleString('ko-KR', {
+                timeZone: 'Asia/Seoul',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+            }),
+        name: '1분',
+        rotateLabel: true,
+        height: 60,
+    },
+    '15m': {
+        // 15분: HH:mm
+        format: (ms) =>
+            new Intl.DateTimeFormat('ko-KR', {
                 hour: '2-digit',
                 minute: '2-digit',
                 timeZone: 'Asia/Seoul',
             }).format(new Date(ms)),
-        tooltip: (ms: number) =>
+        tooltip: (ms) =>
             new Date(ms).toLocaleString('ko-KR', {
                 timeZone: 'Asia/Seoul',
                 year: 'numeric',
@@ -65,18 +88,60 @@ const ZOOM_FORMATTERS = {
                 hour: '2-digit',
                 minute: '2-digit',
             }),
-        name: '1일 (실시간)',
+        name: '15분',
+        rotateLabel: true,
+        height: 60,
     },
-    2: {
-        // 🔧 핵심 수정: 1주일 (일별 평균): MM/dd (요일) 형태
-        format: (ms: number) =>
+    '1h': {
+        // 1시간 (분 간격): HH:mm
+        format: (ms) =>
+            new Intl.DateTimeFormat('ko-KR', {
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'Asia/Seoul',
+            }).format(new Date(ms)),
+        tooltip: (ms) =>
+            new Date(ms).toLocaleString('ko-KR', {
+                timeZone: 'Asia/Seoul',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+            }),
+        name: '1시간 (분)',
+        rotateLabel: true,
+        height: 60,
+    },
+    '1d': {
+        // 1일: MM/dd HH:mm (or MM/dd)
+        format: (ms) =>
+            new Intl.DateTimeFormat('ko-KR', {
+                month: '2-digit',
+                day: '2-digit',
+                timeZone: 'Asia/Seoul',
+            }).format(new Date(ms)),
+        tooltip: (ms) =>
+            new Date(ms).toLocaleString('ko-KR', {
+                timeZone: 'Asia/Seoul',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+            }),
+        name: '1일',
+        rotateLabel: false,
+        height: 48,
+    },
+    '1w': {
+        // 1주: MM/dd (weekday)
+        format: (ms) =>
             new Intl.DateTimeFormat('ko-KR', {
                 month: '2-digit',
                 day: '2-digit',
                 weekday: 'short',
                 timeZone: 'Asia/Seoul',
             }).format(new Date(ms)),
-        tooltip: (ms: number) =>
+        tooltip: (ms) =>
             new Date(ms).toLocaleDateString('ko-KR', {
                 timeZone: 'Asia/Seoul',
                 year: 'numeric',
@@ -84,24 +149,28 @@ const ZOOM_FORMATTERS = {
                 day: 'numeric',
                 weekday: 'long',
             }),
-        name: '1주일 (일별 평균)',
+        name: '1주 (일별)',
+        rotateLabel: false,
+        height: 48,
     },
-    3: {
-        // 1달 (일별 평균): MM/dd 형태
-        format: (ms: number) =>
+    '1mo': {
+        // 1달: MM/dd
+        format: (ms) =>
             new Intl.DateTimeFormat('ko-KR', {
                 month: '2-digit',
                 day: '2-digit',
                 timeZone: 'Asia/Seoul',
             }).format(new Date(ms)),
-        tooltip: (ms: number) =>
+        tooltip: (ms) =>
             new Date(ms).toLocaleDateString('ko-KR', {
                 timeZone: 'Asia/Seoul',
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
             }),
-        name: '1달 (일별 평균)',
+        name: '1달 (일별)',
+        rotateLabel: false,
+        height: 48,
     },
 } as const;
 
@@ -110,7 +179,9 @@ interface LineChartWrapperProps {
     keys: string[];
     labels: Record<string, string>;
     xKey?: string;
-    zoomLevel: number;
+    // 기존 zoomLevel 유지 가능. 새로 preset을 주면 preset 우선 사용.
+    zoomLevel?: number;
+    preset?: Preset;
     peakLimit?: number;
     peakLimitLabel?: string;
     onDataPointClick?: (dataPoint: any, timeMs: number) => void;
@@ -128,7 +199,8 @@ export default function LineChartWrapper({
     keys,
     labels,
     xKey = 'bucket',
-    zoomLevel,
+    zoomLevel = 3,
+    preset,
     peakLimit,
     peakLimitLabel,
     onDataPointClick,
@@ -136,42 +208,53 @@ export default function LineChartWrapper({
     height = 400,
     colors = ['#0ecb81', '#f7931e', '#f6465d', '#26a69a', '#9c27b0'],
 }: LineChartWrapperProps) {
-    // 줌 레벨별 포맷터 가져오기
-    const formatter = useMemo(() => {
-        const level = zoomLevel as keyof typeof ZOOM_FORMATTERS;
-        return ZOOM_FORMATTERS[level] || ZOOM_FORMATTERS[1];
-    }, [zoomLevel]);
+    // 결정 로직: preset 우선, 없으면 zoomLevel -> preset 매핑
+    const effectivePreset = useMemo<Preset>(() => {
+        if (preset) return preset;
+        // fallback 매핑: zoomLevel 0..6 -> presets
+        switch (zoomLevel) {
+            case 0:
+                return '10s';
+            case 1:
+                return '1m';
+            case 2:
+                return '15m';
+            case 3:
+                return '1h';
+            case 4:
+                return '1d';
+            case 5:
+                return '1w';
+            case 6:
+                return '1mo';
+            default:
+                return '1h';
+        }
+    }, [preset, zoomLevel]);
+
+    const formatter = useMemo(() => PRESET_FORMATTERS[effectivePreset], [effectivePreset]);
 
     // Y축 자동 범위 계산
     const yAxisDomain = useMemo(() => {
         if (!data.length || !keys.length) return ['dataMin - 5', 'dataMax + 5'];
-
         const allValues = data.flatMap((item) =>
             keys.map((key) => Number(item[key])).filter((val) => !isNaN(val) && isFinite(val))
         );
-
         if (!allValues.length) return ['dataMin - 5', 'dataMax + 5'];
-
         const min = Math.min(...allValues);
         const max = Math.max(...allValues);
-        const range = max - min;
-        const padding = range * 0.1; // 10% 여백
-
-        return [
-            Math.max(0, min - padding), // 최소값은 0 이상
-            max + padding,
-        ];
+        const range = max - min || Math.abs(max) || 1;
+        const padding = range * 0.1;
+        return [Math.max(0, min - padding), max + padding];
     }, [data, keys]);
 
-    // X축 틱 간격 조정 (데이터 양에 따라)
     const xAxisInterval = useMemo(() => {
-        if (data.length <= 10) return 0; // 모든 틱 표시
-        if (data.length <= 20) return 1; // 2개 걸러서 표시
-        if (data.length <= 50) return Math.floor(data.length / 10); // 10개 정도 표시
-        return Math.floor(data.length / 8); // 8개 정도 표시
+        if (data.length <= 10) return 0;
+        if (data.length <= 20) return 1;
+        if (data.length <= 50) return Math.floor(data.length / 10);
+        return Math.floor(data.length / 8);
     }, [data.length]);
 
-    // 차트 클릭 핸들러
     const handleClick = useCallback(
         (chartData: any) => {
             if (onDataPointClick && chartData?.activePayload?.[0]?.payload) {
@@ -183,11 +266,9 @@ export default function LineChartWrapper({
         [onDataPointClick, xKey]
     );
 
-    // 커스텀 툴팁
     const CustomTooltip = useCallback(
         ({ active, payload, label }: any) => {
             if (!active || !payload?.length) return null;
-
             return (
                 <div
                     style={{
@@ -200,7 +281,7 @@ export default function LineChartWrapper({
                         boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
                     }}
                 >
-                    <div style={{ marginBottom: '8px', fontWeight: '600' }}>
+                    <div style={{ marginBottom: '8px', fontWeight: 600 }}>
                         {formatter.tooltip(new Date(label).getTime())}
                     </div>
                     {payload.map((entry: any, index: number) => (
@@ -220,25 +301,16 @@ export default function LineChartWrapper({
         [formatter, labels]
     );
 
+    const axisRotate = formatter.rotateLabel ?? false;
+    const axisHeight = formatter.height ?? (axisRotate ? 60 : 40);
+
     return (
         <div style={{ width: '100%', height }}>
-            {/* 차트 헤더 - CSV 다운로드 버튼 */}
             {csvExport && (
                 <div
-                    style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '16px',
-                    }}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}
                 >
-                    <div
-                        style={{
-                            color: '#f7f8fa',
-                            fontSize: '14px',
-                            fontWeight: '600',
-                        }}
-                    >
+                    <div style={{ color: '#f7f8fa', fontSize: 14, fontWeight: 600 }}>
                         📊 {formatter.name} • {data.length}개 데이터
                     </div>
                     <CsvDownloader
@@ -249,21 +321,23 @@ export default function LineChartWrapper({
                 </div>
             )}
 
-            {/* 메인 차트 */}
             <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data} onClick={handleClick} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#3e4347" horizontal={true} vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#3e4347" horizontal vertical={false} />
 
                     <XAxis
                         dataKey={xKey}
-                        tickFormatter={formatter.format}
+                        tickFormatter={(v: any) => {
+                            const ms = new Date(v).getTime();
+                            return formatter.format(ms);
+                        }}
                         tick={{ fontSize: 11, fill: '#b7bcc8' }}
                         axisLine={{ stroke: '#3e4347' }}
                         tickLine={{ stroke: '#3e4347' }}
                         interval={xAxisInterval}
-                        angle={zoomLevel <= 1 ? -45 : 0} // 1시간/1일은 라벨 회전
-                        textAnchor={zoomLevel <= 1 ? 'end' : 'middle'}
-                        height={zoomLevel <= 1 ? 60 : 40}
+                        angle={axisRotate ? -45 : 0}
+                        textAnchor={axisRotate ? 'end' : 'middle'}
+                        height={axisHeight}
                     />
 
                     <YAxis
@@ -280,16 +354,8 @@ export default function LineChartWrapper({
 
                     <Tooltip content={<CustomTooltip />} />
 
-                    {keys.length > 1 && (
-                        <Legend
-                            wrapperStyle={{
-                                fontSize: '12px',
-                                color: '#f7f8fa',
-                            }}
-                        />
-                    )}
+                    {keys.length > 1 && <Legend wrapperStyle={{ fontSize: 12, color: '#f7f8fa' }} />}
 
-                    {/* 피크 라임 (임계값) 표시 */}
                     {peakLimit && (
                         <ReferenceLine
                             y={peakLimit}
@@ -299,12 +365,11 @@ export default function LineChartWrapper({
                             label={{
                                 value: peakLimitLabel || `임계값: ${peakLimit}`,
                                 position: 'right',
-                                style: { fill: '#f6465d', fontSize: '11px', fontWeight: '600' },
+                                style: { fill: '#f6465d', fontSize: 11, fontWeight: 600 },
                             }}
                         />
                     )}
 
-                    {/* 데이터 라인들 */}
                     {keys.map((key, index) => (
                         <Line
                             key={key}
@@ -313,12 +378,7 @@ export default function LineChartWrapper({
                             stroke={colors[index % colors.length]}
                             strokeWidth={2}
                             dot={{ r: 3, strokeWidth: 0 }}
-                            activeDot={{
-                                r: 5,
-                                strokeWidth: 2,
-                                stroke: colors[index % colors.length],
-                                fill: '#fff',
-                            }}
+                            activeDot={{ r: 5, strokeWidth: 2, stroke: colors[index % colors.length], fill: '#fff' }}
                             name={labels[key] || key}
                             connectNulls={false}
                         />
@@ -326,19 +386,13 @@ export default function LineChartWrapper({
                 </LineChart>
             </ResponsiveContainer>
 
-            {/* 차트 하단 정보 */}
-            <div
-                style={{
-                    marginTop: '12px',
-                    fontSize: '11px',
-                    color: '#8c9196',
-                    textAlign: 'center',
-                }}
-            >
-                {zoomLevel >= 2 && onDataPointClick && (
+            <div style={{ marginTop: 12, fontSize: 11, color: '#8c9196', textAlign: 'center' }}>
+                {(['1w', '1mo'] as Preset[]).includes(effectivePreset) && onDataPointClick && (
                     <span>💡 데이터 포인트를 클릭하면 더 자세한 시간 범위로 드릴다운됩니다</span>
                 )}
-                {zoomLevel <= 1 && <span>🔄 실시간으로 데이터가 업데이트됩니다</span>}
+                {(['10s', '1m', '15m', '1h'] as Preset[]).includes(effectivePreset) && (
+                    <span>🔄 실시간으로 데이터가 업데이트됩니다</span>
+                )}
             </div>
         </div>
     );
