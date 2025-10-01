@@ -1,458 +1,202 @@
 // src/pages/Modbus/ModbusPresenter.tsx
-
-/**
- * ModbusPresenter.tsx - 전력 모니터링 UI (트레이딩 스타일)
- *
- * 🎨 디자인 특징:
- * - 다크 트레이딩 테마 (#0b0e11 배경, #131722 카드)
- * - 실시간 전력 값을 주식 가격처럼 표시
- * - 드릴다운 차트: 클릭으로 더 세부적인 시간 범위로 이동
- * - 6개 통계 카드: 현재/평균/최대/최소/개수/피크상태
- * - 피크 임계값 설정 및 시각화
- * - 활동 로그 (콘솔 스타일)
- */
-
 import React from 'react';
-import styles from './Modbus.module.css';
 import LineChartWrapper from '@/components/charts/LineChartWrapper';
-import Loading from '@/components/common/Loading';
-import Error from '@/components/common/Error';
+import styles from './Modbus.module.css'; // ✅ 정확한 경로
 
-/**
- * 🔧 Props 타입 정의
- */
+type Stat = { avg: number | null; max: number | null; min: number | null; count: number };
 type Props = {
-    // 장치 및 데이터 선택
     deviceId: number;
     setDeviceId: (id: number) => void;
     deviceOptions: number[];
     column: string;
-    setColumn: (column: string) => void;
-
-    // 줌 컨트롤
+    setColumn: (c: string) => void;
     zoomLevel: number;
     zoomLabel: string;
     onZoomIn: () => void;
     onZoomOut: () => void;
     canZoomIn: boolean;
     canZoomOut: boolean;
-
-    // 차트 인터랙션
-    onDataPointClick?: (dataPoint: any, timeMs: number) => void;
+    onDataPointClick: (d: any, t: number) => void;
     onManualRefresh: () => void;
-
-    // 데이터와 상태
     data: any[];
-    stats: any;
+    stats: Record<string, Stat>;
     loading: boolean;
     error: string | null;
     logs: string[];
-
-    // 피크 임계값
     peakLimits: Record<string, number>;
-    setPeakLimits: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+    setPeakLimits: (p: Record<string, number>) => void;
 };
 
-export default function ModbusPresenter({
-    deviceId,
-    setDeviceId,
-    deviceOptions,
-    column,
-    setColumn,
-    zoomLevel,
-    zoomLabel,
-    onZoomIn,
-    onZoomOut,
-    canZoomIn,
-    canZoomOut,
-    onDataPointClick,
-    onManualRefresh,
-    data,
-    stats,
-    loading,
-    error,
-    logs,
-    peakLimits,
-    setPeakLimits,
-}: Props) {
-    // 🔄 로딩 및 에러 상태 처리
-    if (loading) return <Loading />;
-    if (error) return <Error msg={error} />;
+const KEYS = [
+    'activepower',
+    'reactivepower',
+    'apparentpower',
+    'voltagell',
+    'voltageln',
+    'current',
+    'powerfactor',
+    'activeenergy',
+    'reactiveenergy',
+    'apparentenergy',
+];
+const LABELS: Record<string, string> = {
+    activepower: 'Active Power (kW)',
+    reactivepower: 'Reactive Power (kVar)',
+    apparentpower: 'Apparent Power (kVA)',
+    voltagell: 'Voltage L-L (V)',
+    voltageln: 'Voltage L-N (V)',
+    current: 'Sum Line Currents (A)',
+    powerfactor: 'Power Factor',
+    activeenergy: 'Active Energy (kWh)',
+    reactiveenergy: 'Reactive Energy (kVArh)',
+    apparentenergy: 'Apparent Energy (kVAh)',
+};
 
-    // ============= 실시간 값 및 변화량 계산 =============
+export default function ModbusPresenter(props: Props) {
+    const {
+        deviceId,
+        deviceOptions,
+        column,
+        setColumn,
+        zoomLabel,
+        onZoomIn,
+        onZoomOut,
+        canZoomIn,
+        canZoomOut,
+        onManualRefresh,
+        data,
+        stats,
+        loading,
+        error,
+        logs,
+        onDataPointClick,
+    } = props;
 
-    const lastDataPoint = data?.length ? data[data.length - 1] : null;
-    const currentValue = lastDataPoint?.[column] ?? 0;
-    const previousValue = data?.length > 1 ? data[data.length - 2]?.[column] ?? 0 : 0;
-
-    const valueChange = currentValue - previousValue;
-    const changePercent = previousValue ? ((valueChange / previousValue) * 100).toFixed(2) : '0.00';
-
-    // 🎯 현재 컬럼의 피크 임계값
-    const currentPeakLimit = peakLimits[column];
-
-    // 🏷️ 컬럼별 한글 라벨 정의
-    const columnLabels: Record<string, string> = {
-        active_power: '유효전력 (kW)',
-        reactive_power: '무효전력 (kVAR)',
-        apparent_power: '피상전력 (kVA)',
-        voltage_ll: '선간전압 (V)',
-        voltage_ln: '상전압 (V)',
-        current: '전류 (A)',
-        power_factor: '역률',
-        active_energy: '유효전력량 (kWh)',
-        reactive_energy: '무효전력량 (kVArh)',
-        apparent_energy: '피상전력량 (kVAh)',
-    };
-
-    // 🏷️ 컬럼별 단위 정의
-    const unitLabels: Record<string, string> = {
-        active_power: 'kW',
-        reactive_power: 'kVAR',
-        apparent_power: 'kVA',
-        voltage_ll: 'V',
-        voltage_ln: 'V',
-        current: 'A',
-        power_factor: '',
-        active_energy: 'kWh',
-        reactive_energy: 'kVArh',
-        apparent_energy: 'kVAh',
-    };
-
-    /**
-     * 🎯 전력계 상태 판정 함수
-     */
-    const getPowerStatus = (value: number, columnType: string) => {
-        switch (columnType) {
-            case 'active_power':
-                if (value >= 12) return { text: '고부하', color: '#f6465d', icon: '🔥' };
-                if (value >= 6) return { text: '정상부하', color: '#f7931e', icon: '⚡' };
-                if (value >= 2) return { text: '저부하', color: '#0ecb81', icon: '💡' };
-                return { text: '대기모드', color: '#848e9c', icon: '😴' };
-            case 'voltage_ll':
-            case 'voltage_ln':
-                if (value >= 240) return { text: '정상전압', color: '#0ecb81', icon: '✅' };
-                if (value >= 200) return { text: '저전압', color: '#f7931e', icon: '⚠️' };
-                return { text: '이상전압', color: '#f6465d', icon: '🚨' };
-            case 'current':
-                if (value >= 60) return { text: '고전류', color: '#f6465d', icon: '🔥' };
-                if (value >= 30) return { text: '정상전류', color: '#0ecb81', icon: '⚡' };
-                return { text: '저전류', color: '#f7931e', icon: '💡' };
-            default:
-                return { text: '측정중', color: '#0ecb81', icon: '📊' };
-        }
-    };
-
-    /**
-     * 🚨 피크 임계값 업데이트 함수
-     */
-    const handlePeakLimitChange = (inputValue: string) => {
-        const numericValue = parseFloat(inputValue);
-        if (!isNaN(numericValue) && numericValue > 0) {
-            setPeakLimits((prev) => ({
-                ...prev,
-                [column]: numericValue,
-            }));
-        }
-    };
-
-    /**
-     * 🗑️ 피크 임계값 제거 함수
-     */
-    const handlePeakLimitRemove = () => {
-        setPeakLimits((prev) => {
-            const updated = { ...prev };
-            delete updated[column];
-            return updated;
-        });
-    };
-
-    const powerStatus = getPowerStatus(currentValue, column);
-
-    // ============= UI 렌더링 =============
+    const currentStat = stats[column];
+    const currentValue = data.length > 0 ? data[data.length - 1]?.[column] : null;
+    const fmt = (v: number | null) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '-');
 
     return (
         <div className={styles.container}>
             <div className={styles.content}>
-                {/* ============= 트레이딩 스타일 헤더 ============= */}
                 <div className={styles.header}>
                     <div>
-                        <h1 className={styles.title}>⚡ PWR-{deviceId}</h1>
-                        <div className={styles.subtitle}>전력 모니터링 • {zoomLabel} 범위</div>
+                        <h1 className={styles.title}>MODBUS SENSOR {deviceId}</h1>
+                        <p className={styles.subtitle}>
+                            {LABELS[column]} / {zoomLabel}
+                        </p>
                     </div>
-
                     <div className={styles.priceInfo}>
-                        <h2 className={styles.currentPrice}>
-                            {currentValue.toFixed(3)} {unitLabels[column]}
-                        </h2>
-                        <div className={`${styles.priceChange} ${valueChange < 0 ? styles.priceChangeNegative : ''}`}>
-                            <span>{valueChange >= 0 ? '📈' : '📉'}</span>
-                            <span>{changePercent}%</span>
-                            <span>
-                                ({valueChange >= 0 ? '+' : ''}
-                                {valueChange.toFixed(3)})
-                            </span>
-                        </div>
+                        <p className={styles.currentPrice}>{fmt(currentValue)}</p>
+                        <p className={styles.priceChange}>
+                            <span>▲</span> Live
+                        </p>
                     </div>
                 </div>
 
-                {/* ============= 컨트롤 패널 ============= */}
                 <div className={styles.controls}>
                     <div className={styles.controlsGrid}>
-                        {/* 장치 선택 */}
                         <div className={styles.controlGroup}>
-                            <label>전력 장치</label>
-                            <select value={deviceId} onChange={(e) => setDeviceId(Number(e.target.value))}>
+                            <label>Device ID</label>
+                            <select value={deviceId} onChange={(e) => props.setDeviceId(Number(e.target.value))}>
                                 {deviceOptions.map((id) => (
                                     <option key={id} value={id}>
-                                        장치 {id}
+                                        {id}
                                     </option>
                                 ))}
                             </select>
                         </div>
-
-                        {/* 데이터 타입 선택 */}
                         <div className={styles.controlGroup}>
-                            <label>측정 항목</label>
+                            <label>Metric</label>
                             <select value={column} onChange={(e) => setColumn(e.target.value)}>
-                                <optgroup label="🔌 전력">
-                                    <option value="active_power">유효전력 (kW)</option>
-                                    <option value="reactive_power">무효전력 (kVAR)</option>
-                                    <option value="apparent_power">피상전력 (kVA)</option>
-                                </optgroup>
-                                <optgroup label="⚡ 전압">
-                                    <option value="voltage_ll">선간전압 (V)</option>
-                                    <option value="voltage_ln">상전압 (V)</option>
-                                </optgroup>
-                                <optgroup label="🔋 전류 & 역률">
-                                    <option value="current">전류 (A)</option>
-                                    <option value="power_factor">역률</option>
-                                </optgroup>
-                                <optgroup label="📈 전력량">
-                                    <option value="active_energy">유효전력량 (kWh)</option>
-                                    <option value="reactive_energy">무효전력량 (kVArh)</option>
-                                    <option value="apparent_energy">피상전력량 (kVAh)</option>
-                                </optgroup>
+                                {KEYS.map((k) => (
+                                    <option key={k} value={k}>
+                                        {LABELS[k]}
+                                    </option>
+                                ))}
                             </select>
                         </div>
-
-                        {/* 줌 컨트롤 */}
                         <div className={styles.controlGroup}>
-                            <label>🔍 시간 범위</label>
-                            <div style={{ display: 'flex', gap: '6px' }}>
-                                <button
-                                    onClick={onZoomIn}
-                                    disabled={!canZoomIn}
-                                    style={{
-                                        flex: 1,
-                                        opacity: canZoomIn ? 1 : 0.5,
-                                        cursor: canZoomIn ? 'pointer' : 'not-allowed',
-                                        padding: '6px 8px',
-                                        fontSize: '11px',
-                                    }}
-                                    title={canZoomIn ? '더 세부적인 시간으로 확대' : '최대 확대됨'}
-                                >
-                                    🔍+ 확대
-                                </button>
-                                <button
-                                    onClick={onZoomOut}
-                                    disabled={!canZoomOut}
-                                    style={{
-                                        flex: 1,
-                                        opacity: canZoomOut ? 1 : 0.5,
-                                        cursor: canZoomOut ? 'pointer' : 'not-allowed',
-                                        padding: '6px 8px',
-                                        fontSize: '11px',
-                                    }}
-                                    title={canZoomOut ? '더 넓은 시간으로 축소' : '최대 축소됨'}
-                                >
-                                    🔍- 축소
-                                </button>
-                            </div>
+                            <label>Zoom</label>
+                            <button onClick={onZoomIn} disabled={!canZoomIn}>
+                                ➖ In
+                            </button>
                         </div>
-
-                        {/* 현재 시간 범위 표시 */}
-                        <div className={styles.controlGroup}>
-                            <label>📊 현재 보기</label>
-                            <div
-                                style={{
-                                    padding: '8px 12px',
-                                    background: '#2b2f36',
-                                    border: `2px solid ${zoomLevel <= 1 ? '#0ecb81' : '#f7931e'}`,
-                                    borderRadius: '4px',
-                                    color: zoomLevel <= 1 ? '#0ecb81' : '#f7931e',
-                                    fontSize: '12px',
-                                    textAlign: 'center',
-                                    fontWeight: '600',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '4px',
-                                }}
-                            >
-                                {zoomLevel <= 1 && <span>🔴</span>}
-                                📅 {zoomLabel}
-                                {zoomLevel <= 1 && <span>(실시간)</span>}
-                            </div>
-                        </div>
-
-                        {/* 피크 임계값 설정 */}
-                        <div className={styles.controlGroup}>
-                            <label>🚨 알림 임계값 ({unitLabels[column]})</label>
-                            <input
-                                type="number"
-                                step="0.1"
-                                value={currentPeakLimit || ''}
-                                onChange={(e) => handlePeakLimitChange(e.target.value)}
-                                placeholder="임계값 입력"
-                                style={{
-                                    background: '#2b2f36',
-                                    border: '1px solid #2e3238',
-                                    color: '#f7f8fa',
-                                    padding: '8px 12px',
-                                    borderRadius: '4px',
-                                    fontSize: '12px',
-                                }}
-                            />
-                        </div>
-
-                        {/* 새로고침 및 임계값 제거 버튼 */}
                         <div className={styles.controlGroup}>
                             <label>&nbsp;</label>
-                            <div style={{ display: 'flex', gap: '6px' }}>
-                                <button onClick={onManualRefresh} style={{ flex: 1, fontSize: '11px' }}>
-                                    🔄 새로고침
-                                </button>
-                                {currentPeakLimit && (
-                                    <button
-                                        onClick={handlePeakLimitRemove}
-                                        style={{
-                                            flex: 1,
-                                            background: '#f6465d',
-                                            borderColor: '#f6465d',
-                                            fontSize: '11px',
-                                        }}
-                                    >
-                                        🗑️ 제거
-                                    </button>
-                                )}
-                            </div>
+                            <button onClick={onZoomOut} disabled={!canZoomOut}>
+                                ➕ Out
+                            </button>
+                        </div>
+                        <div className={styles.controlGroup}>
+                            <label>&nbsp;</label>
+                            <button onClick={onManualRefresh} disabled={loading}>
+                                🔄 Refresh
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                {/* ============= 드릴다운 차트 영역 ============= */}
+                {error && (
+                    <div
+                        style={{
+                            padding: '12px',
+                            background: '#f87171',
+                            color: '#fff',
+                            borderRadius: '8px',
+                            marginBottom: '8px',
+                        }}
+                    >
+                        {error}
+                    </div>
+                )}
+
                 <div className={styles.chartSection}>
                     <div className={styles.chartToolbar}>
-                        <div className={styles.chartTitle}>⚡ {columnLabels[column]} 분석 차트</div>
+                        <div className={styles.chartTitle}>{LABELS[column]}</div>
                         <div className={styles.chartControls}>
-                            <span style={{ fontSize: '11px', color: powerStatus.color, fontWeight: '600' }}>
-                                {powerStatus.icon} {powerStatus.text} • {data.length}개 데이터
-                            </span>
-                            {currentPeakLimit && (
-                                <span style={{ fontSize: '11px', color: '#f6465d', fontWeight: '600' }}>
-                                    • 🚨 임계값: {currentPeakLimit} {unitLabels[column]}
-                                </span>
-                            )}
-                            <span style={{ fontSize: '11px', color: '#f7931e', fontWeight: '600' }}>
-                                • 📊 범위: {zoomLabel}
-                            </span>
-                            {zoomLevel >= 2 && (
-                                <span style={{ fontSize: '11px', color: '#26a69a', fontWeight: '600' }}>
-                                    • 🖱️ 클릭으로 드릴다운 가능
-                                </span>
-                            )}
+                            <span style={{ fontSize: '11px', color: '#94a3b8' }}>Points: {data.length}</span>
                         </div>
                     </div>
-
-                    <div style={{ height: 'calc(100% - 60px)' }}>
-                        <LineChartWrapper
-                            data={data}
-                            keys={[column]}
-                            labels={columnLabels}
-                            xKey="bucket"
-                            zoomLevel={zoomLevel}
-                            peakLimit={currentPeakLimit}
-                            peakLimitLabel={`${columnLabels[column]} 임계값: ${currentPeakLimit || 0}`}
-                            onDataPointClick={onDataPointClick}
-                            csvExport={{
-                                apiPath: '/data/modbus/query',
-                                extraParams: { device_id: deviceId },
-                                filePrefix: `전력데이터-장치${deviceId}-${zoomLabel}`,
-                            }}
-                        />
-                    </div>
+                    <LineChartWrapper
+                        data={data}
+                        keys={[column]}
+                        labels={{ [column]: LABELS[column] }}
+                        xKey="bucket"
+                        onDataPointClick={onDataPointClick}
+                        zoomLevel={props.zoomLevel}
+                    />
                 </div>
 
-                {/* ============= 실시간 통계 카드 그리드 ============= */}
                 <div className={styles.statsGrid}>
-                    {/* 현재값 */}
                     <div className={styles.statCard}>
-                        <div className={styles.statLabel}>현재값</div>
-                        <div className={styles.statValue}>{currentValue.toFixed(3)}</div>
-                        <div className={`${styles.statChange} ${valueChange < 0 ? styles.statChangeNegative : ''}`}>
-                            {valueChange >= 0 ? '+' : ''}
-                            {valueChange.toFixed(3)} {unitLabels[column]}
-                        </div>
+                        <div className={styles.statLabel}>평균</div>
+                        <div className={styles.statValue}>{fmt(currentStat?.avg)}</div>
                     </div>
-
-                    {/* 평균값 */}
                     <div className={styles.statCard}>
-                        <div className={styles.statLabel}>평균 ({zoomLabel})</div>
-                        <div className={styles.statValue}>{stats?.[column]?.avg?.toFixed(3) || '0.000'}</div>
-                        <div className={styles.statChange}>평균 {unitLabels[column]}</div>
+                        <div className={styles.statLabel}>최대</div>
+                        <div className={styles.statValue}>{fmt(currentStat?.max)}</div>
                     </div>
-
-                    {/* 최대값 */}
                     <div className={styles.statCard}>
-                        <div className={styles.statLabel}>최고값 ({zoomLabel})</div>
-                        <div className={styles.statValue}>{stats?.[column]?.max?.toFixed(3) || '0.000'}</div>
-                        <div className={styles.statChange}>최고값</div>
+                        <div className={styles.statLabel}>최소</div>
+                        <div className={styles.statValue}>{fmt(currentStat?.min)}</div>
                     </div>
-
-                    {/* 최소값 */}
                     <div className={styles.statCard}>
-                        <div className={styles.statLabel}>최저값 ({zoomLabel})</div>
-                        <div className={styles.statValue}>{stats?.[column]?.min?.toFixed(3) || '0.000'}</div>
-                        <div className={styles.statChange}>최저값</div>
+                        <div className={styles.statLabel}>샘플 수</div>
+                        <div className={styles.statValue}>{currentStat?.count ?? 0}</div>
                     </div>
-
-                    {/* 데이터 개수 */}
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>측정 횟수</div>
-                        <div className={styles.statValue}>{stats?.[column]?.count || '0'}</div>
-                        <div className={styles.statChange}>회</div>
-                    </div>
-
-                    {/* 임계값 상태 */}
-                    {currentPeakLimit && (
-                        <div className={styles.statCard}>
-                            <div className={styles.statLabel}>임계값 상태</div>
-                            <div
-                                className={styles.statValue}
-                                style={{
-                                    color: currentValue > currentPeakLimit ? '#f6465d' : '#0ecb81',
-                                }}
-                            >
-                                {currentValue > currentPeakLimit ? '⚠️' : '✅'}
-                            </div>
-                            <div className={styles.statChange}>
-                                {currentValue > currentPeakLimit ? '임계값 초과' : '정상 범위'}
-                            </div>
-                        </div>
-                    )}
                 </div>
 
-                {/* ============= 활동 로그 패널 ============= */}
-                <div className={styles.logPanel}>
-                    <div className={styles.logHeader}>⚡ 전력 시스템 활동 로그</div>
-                    {logs.slice(-20).map((logEntry, index) => (
-                        <div key={index} className={styles.logItem}>
-                            {logEntry}
-                        </div>
-                    ))}
-                    {logs.length === 0 && <div className={styles.logItem}>최근 활동 없음</div>}
-                </div>
+                {logs.length > 0 && (
+                    <div className={styles.logPanel}>
+                        <div className={styles.logHeader}>📜 Activity Log</div>
+                        {logs.slice(-10).map((log, i) => (
+                            <div key={i} className={styles.logItem}>
+                                {log}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -1,224 +1,112 @@
-// src/pages/Env/EnvContainer.tsx - 타입 안전 버전
+// src/pages/Env/EnvContainer.tsx
+// - 4단계 줌(1h/1d/1w/1mo)만 지원
+// - API 파라미터는 deviceid/maxpoints로 통일
+// - 데이터는 [{ bucket, temperature, humidity }] 형태로 Presenter에 전달
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import EnvPresenter from './EnvPresenter';
 import { fetchEnvQuery } from '@/api/env';
 import { getErrorMessage } from '@/lib/http';
 
-type ZoomLevel = 0 | 1 | 2 | 3 | 4 | 5;
-type ZoomPreset = '1h' | '1d' | '1w' | '1mo' | '6mo' | '1y';
+type ZoomLevel = 0 | 1 | 2 | 3;
+type ZoomPreset = '1h' | '1d' | '1w' | '1mo';
 
-const ZOOM_CONFIGS: Record<ZoomLevel, { preset: ZoomPreset; label: string; days: number; realtime: boolean }> = {
-    0: { preset: '1h', label: '1시간', days: 1 / 24, realtime: true },
-    1: { preset: '1d', label: '1일', days: 1, realtime: true },
-    2: { preset: '1w', label: '1주일', days: 7, realtime: false },
-    3: { preset: '1mo', label: '1달', days: 30, realtime: false },
-    4: { preset: '6mo', label: '6개월', days: 180, realtime: false },
-    5: { preset: '1y', label: '1년', days: 365, realtime: false },
+const ZOOMS: Record<ZoomLevel, { preset: ZoomPreset; label: string; realtime: boolean; maxPoints: number }> = {
+    0: { preset: '1h', label: '1시간', realtime: true, maxPoints: 60 },
+    1: { preset: '1d', label: '1일', realtime: true, maxPoints: 1440 },
+    2: { preset: '1w', label: '1주', realtime: false, maxPoints: 336 },
+    3: { preset: '1mo', label: '1개월', realtime: false, maxPoints: 31 },
 };
 
-function isValidZoomLevel(level: number): level is ZoomLevel {
-    return level >= 0 && level <= 5 && Number.isInteger(level);
-}
+const DEVICE_OPTIONS = [21, 22, 23];
 
-function getZoomConfig(level: number) {
-    if (!isValidZoomLevel(level)) {
-        console.warn(`잘못된 줌 레벨: ${level}, 기본값 2 사용`);
-        return ZOOM_CONFIGS[2];
-    }
-    return ZOOM_CONFIGS[level];
+function calcStats(rows: any[], key: 'temperature' | 'humidity') {
+    const nums = rows.map((r) => r?.[key]).filter((v: any) => typeof v === 'number' && Number.isFinite(v)) as number[];
+    if (!nums.length) return { avg: null, max: null, min: null, count: 0 };
+    const sum = nums.reduce((a, b) => a + b, 0);
+    return {
+        avg: Number((sum / nums.length).toFixed(2)),
+        max: Math.max(...nums),
+        min: Math.min(...nums),
+        count: nums.length,
+    };
 }
 
 export default function EnvContainer() {
-    const [deviceId, setDeviceId] = useState<number>(21);
-    const [column, setColumn] = useState<string>('temperature');
-    const [zoomLevel, setZoomLevel] = useState<ZoomLevel>(2);
-    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-
-    const [peakLimits, setPeakLimits] = useState<Record<string, number>>({
-        temperature: 30.0,
-        humidity: 80.0,
-    });
+    const [deviceId, setDeviceId] = useState<number>(DEVICE_OPTIONS[0]);
+    const [zoom, setZoom] = useState<ZoomLevel>(0);
+    const [column, setColumn] = useState<'temperature' | 'humidity'>('temperature');
 
     const [data, setData] = useState<any[]>([]);
-    const [stats, setStats] = useState<any>({});
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [logs, setLogs] = useState<string[]>([]);
 
-    const timer = useRef<number | undefined>(undefined);
-    const deviceOptions = [21, 22, 23];
+    const { preset, label, maxPoints } = ZOOMS[zoom];
 
-    const log = useCallback((message: string) => {
-        setLogs((prev) => [...prev, `${new Date().toLocaleTimeString('ko-KR')}: ${message}`].slice(-100));
-    }, []);
-
-    const calculateStats = useCallback((values: number[]) => {
-        const validValues = values.filter((v) => v != null && !isNaN(v));
-        if (!validValues.length) return { avg: 0, max: 0, min: 0, count: 0 };
-
-        return {
-            avg: validValues.reduce((sum, val) => sum + val, 0) / validValues.length,
-            max: Math.max(...validValues),
-            min: Math.min(...validValues),
-            count: validValues.length,
-        };
-    }, []);
-
-    const processData = useCallback(
-        (rawRows: any[]) => {
-            const processedRows = rawRows.map((row) => ({
-                ...row,
-                bucket: row.bucket ? new Date(row.bucket).getTime() : Date.now(),
-                temperature: row.temperature || 0,
-                humidity: row.humidity || 0,
-            }));
-
-            const allStats = {
-                temperature: calculateStats(processedRows.map((r) => r.temperature)),
-                humidity: calculateStats(processedRows.map((r) => r.humidity)),
-            };
-
-            setStats(allStats);
-            setData(processedRows);
-        },
-        [calculateStats]
-    );
-
-    const fetchData = useCallback(async () => {
+    const load = useCallback(async () => {
         setLoading(true);
+        setError(null);
         try {
-            const config = getZoomConfig(zoomLevel);
-            let apiParams: any = {
-                device_id: deviceId,
-                preset: config.preset,
-                max_points: Math.min(5000, Math.floor(config.days * 48)),
-            };
-
-            if (selectedDate && zoomLevel <= 1) {
-                const dayStart = new Date(selectedDate);
-                dayStart.setHours(0, 0, 0, 0);
-                const dayEnd = new Date(selectedDate);
-                dayEnd.setHours(23, 59, 59, 999);
-
-                apiParams = {
-                    ...apiParams,
-                    start: dayStart.toISOString(),
-                    end: dayEnd.toISOString(),
-                };
-            }
-
-            const response = await fetchEnvQuery(apiParams);
-
-            if (response.data && response.data.length > 0) {
-                processData(response.data);
-                log(`✅ ${config.label} 환경 데이터 ${response.data.length}개 로드됨 (장치 ${deviceId})`);
-            } else {
-                setData([]);
-                setStats({});
-                log(`⚠️ ${config.label} 환경 데이터 없음 (장치 ${deviceId})`);
-            }
-
-            setError(null);
-        } catch (err) {
-            const errorMessage = getErrorMessage(err);
-            setError(errorMessage);
-            log(`❌ 환경 데이터 로드 실패: ${errorMessage}`);
+            const res = await fetchEnvQuery({
+                deviceid: deviceId,
+                preset,
+                maxpoints: maxPoints,
+            });
+            // res.data는 [{ bucket, temperature, humidity, ... }]
+            const rows = (res?.data ?? []).map((d) => ({
+                bucket: d.bucket,
+                temperature: d.temperature,
+                humidity: d.humidity,
+            }));
+            setData(rows);
+        } catch (e) {
+            setError(getErrorMessage(e));
         } finally {
             setLoading(false);
         }
-    }, [deviceId, zoomLevel, selectedDate, processData, log]);
-
-    const handleZoomIn = useCallback(() => {
-        if (zoomLevel > 0) {
-            const newLevel = (zoomLevel - 1) as ZoomLevel;
-            setZoomLevel(newLevel);
-            setSelectedDate(null);
-            const config = getZoomConfig(newLevel);
-            log(`🔍 확대: ${config.label} 범위로 전환`);
-        }
-    }, [zoomLevel, log]);
-
-    const handleZoomOut = useCallback(() => {
-        if (zoomLevel < 5) {
-            const newLevel = (zoomLevel + 1) as ZoomLevel;
-            setZoomLevel(newLevel);
-            setSelectedDate(null);
-            const config = getZoomConfig(newLevel);
-            log(`🔍 축소: ${config.label} 범위로 전환`);
-        }
-    }, [zoomLevel, log]);
-
-    const handleDataPointClick = useCallback(
-        (dataPoint: any, timeMs: number) => {
-            const clickedDate = new Date(timeMs);
-
-            if (zoomLevel === 2) {
-                setZoomLevel(1);
-                setSelectedDate(clickedDate);
-                log(`📅 ${clickedDate.toLocaleDateString('ko-KR')} 환경 일별 데이터로 드릴다운`);
-            } else if (zoomLevel === 3) {
-                setZoomLevel(2);
-                const monday = new Date(clickedDate);
-                monday.setDate(clickedDate.getDate() - clickedDate.getDay() + 1);
-                setSelectedDate(monday);
-                log(`📊 ${monday.toLocaleDateString('ko-KR')} 환경 주간 데이터로 드릴다운`);
-            } else if (zoomLevel === 1) {
-                setZoomLevel(0);
-                setSelectedDate(clickedDate);
-                log(`🕐 ${clickedDate.toLocaleString('ko-KR')} 환경 시간별 데이터로 드릴다운`);
-            }
-        },
-        [zoomLevel, log]
-    );
+    }, [deviceId, preset, maxPoints]);
 
     useEffect(() => {
-        window.clearInterval(timer.current);
+        load();
+    }, [load]);
 
-        const config = getZoomConfig(zoomLevel);
-        fetchData();
+    const stats = useMemo(
+        () => ({
+            temperature: calcStats(data, 'temperature'),
+            humidity: calcStats(data, 'humidity'),
+        }),
+        [data]
+    );
 
-        if (config.realtime) {
-            const updateInterval = zoomLevel === 0 ? 15000 : 30000;
-            timer.current = window.setInterval(fetchData, updateInterval);
-            log(`🔴 환경센서 실시간 업데이트 시작 (${updateInterval / 1000}초 간격)`);
-        } else {
-            log(`📊 ${config.label} 정적 모드`);
-        }
+    const onZoomIn = () => setZoom((z) => (z > 0 ? ((z - 1) as ZoomLevel) : z));
+    const onZoomOut = () => setZoom((z) => (z < 3 ? ((z + 1) as ZoomLevel) : z));
 
-        return () => window.clearInterval(timer.current);
-    }, [zoomLevel, fetchData, log]);
-
-    const handleManualRefresh = useCallback(() => {
-        const config = getZoomConfig(zoomLevel);
-        log(`🔄 ${config.label} 환경 데이터 수동 새로고침 시작`);
-        fetchData();
-    }, [fetchData, zoomLevel, log]);
-
-    const currentZoomConfig = getZoomConfig(zoomLevel);
+    const onDataPointClick = (_d: any, _t: number) => {
+        // 필요 시 드릴다운 구현
+    };
 
     return (
         <EnvPresenter
             deviceId={deviceId}
             setDeviceId={setDeviceId}
-            deviceOptions={deviceOptions}
+            deviceOptions={DEVICE_OPTIONS}
             column={column}
             setColumn={setColumn}
-            zoomLevel={zoomLevel}
-            zoomLabel={currentZoomConfig.label}
-            onZoomIn={handleZoomIn}
-            onZoomOut={handleZoomOut}
-            canZoomIn={zoomLevel > 0}
-            canZoomOut={zoomLevel < 5}
-            onDataPointClick={handleDataPointClick}
-            onManualRefresh={handleManualRefresh}
+            zoomLevel={zoom}
+            zoomLabel={label}
+            onZoomIn={onZoomIn}
+            onZoomOut={onZoomOut}
+            canZoomIn={zoom > 0}
+            canZoomOut={zoom < 3}
+            onDataPointClick={onDataPointClick}
+            onManualRefresh={load}
             data={data}
-            stats={stats}
+            stats={stats as any}
             loading={loading}
             error={error}
-            logs={logs}
-            peakLimits={peakLimits}
-            setPeakLimits={setPeakLimits}
+            logs={[]}
+            peakLimits={{}}
+            setPeakLimits={() => {}}
         />
     );
 }

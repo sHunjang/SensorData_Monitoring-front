@@ -1,40 +1,12 @@
 /* src/index.css */
-/* 전역 리셋 + 반응형 컨테이너 + 탭 스타일 */
 * {
     box-sizing: border-box;
 }
+
 html,
 body,
 #root {
     height: 100%;
     margin: 0;
     font-family: system-ui, -apple-system, Segoe UI, Roboto;
-}
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 16px 24px;
-}
-.tabs {
-    display: flex;
-    gap: 12px;
-    padding: 8px 16px;
-    background: #111827;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-}
-.tab {
-    color: #d1d5db;
-    text-decoration: none;
-    padding: 6px 12px;
-    border-radius: 6px;
-    transition: background 0.2s;
-}
-.tab:hover {
-    background: #374151;
-}
-.tab--active {
-    background: #2563eb;
-    color: #fff;
 }
