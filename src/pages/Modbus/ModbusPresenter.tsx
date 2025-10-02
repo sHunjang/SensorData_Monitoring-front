@@ -1,5 +1,6 @@
 import React from 'react';
 import LineChartWrapper from '@/components/charts/LineChartWrapper';
+import ZoomPanControls from '@/components/ui/ZoomPanControls';
 import styles from './Modbus.module.css';
 
 type Stat = { avg: number | null; max: number | null; min: number | null; count: number };
@@ -162,9 +163,36 @@ export default function ModbusPresenter({
                     </div>
                 </div>
 
-                {/* Controls */}
+                {/* Controls: ZoomPanControls 사용 */}
                 <div className={styles.controls}>
-                    <div className={styles.controlsGrid}>
+                    <div style={{ maxWidth: '100%' }}>
+                        <ZoomPanControls
+                            zoom={zoomLevel}
+                            zoomLabel={zoomLabel}
+                            onZoomIn={onZoomIn}
+                            onZoomOut={onZoomOut}
+                            canZoomIn={canZoomIn}
+                            canZoomOut={canZoomOut}
+                            onPanLeft={panLeft}
+                            onPanRight={panRight}
+                            startAt={startAt}
+                            endAt={endAt}
+                            setStartAt={setStartAt}
+                            setEndAt={setEndAt}
+                            setRelativeRange={setRelativeRange}
+                            onRefresh={onManualRefresh}
+                        />
+                    </div>
+
+                    {/* small extra controls for device/column/peak limit */}
+                    <div
+                        style={{
+                            marginTop: 12,
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                            gap: 12,
+                        }}
+                    >
                         <div className={styles.controlGroup}>
                             <label>Device ID</label>
                             <select value={deviceId} onChange={(e) => setDeviceId(Number(e.target.value))}>
@@ -201,18 +229,6 @@ export default function ModbusPresenter({
                         </div>
 
                         <div className={styles.controlGroup}>
-                            <label>Zoom</label>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={onZoomIn} disabled={!canZoomIn}>
-                                    ➕ In
-                                </button>
-                                <button onClick={onZoomOut} disabled={!canZoomOut}>
-                                    ➖ Out
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className={styles.controlGroup}>
                             <label>임계값</label>
                             <input
                                 type="number"
@@ -226,7 +242,7 @@ export default function ModbusPresenter({
                         <div className={styles.controlGroup}>
                             <label>&nbsp;</label>
                             <div style={{ display: 'flex', gap: 8 }}>
-                                <button className="primary" onClick={onManualRefresh}>
+                                <button onClick={onManualRefresh} className="primary">
                                     🔄 Refresh
                                 </button>
                                 {currentPeakLimit != null && (
@@ -237,48 +253,13 @@ export default function ModbusPresenter({
                                         🗑️ Remove
                                     </button>
                                 )}
-                            </div>
-                        </div>
-
-                        {/* Range selection controls */}
-                        <div className={styles.controlGroup}>
-                            <label>기간 선택</label>
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                <input
-                                    type="datetime-local"
-                                    value={startAt ?? ''}
-                                    onChange={(e) => setStartAt?.(e.target.value || null)}
-                                />
-                                <span>~</span>
-                                <input
-                                    type="datetime-local"
-                                    value={endAt ?? ''}
-                                    onChange={(e) => setEndAt?.(e.target.value || null)}
-                                />
-                            </div>
-                        </div>
-
-                        <div className={styles.controlGroup}>
-                            <label>빠른 범위</label>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={() => setRelativeRange?.(60)}>Last 1h</button>
-                                <button onClick={() => setRelativeRange?.(24 * 60)}>Last 24h</button>
-                                <button onClick={() => setRelativeRange?.(7 * 24 * 60)}>Last 7d</button>
-                                <button onClick={clearRange}>Clear</button>
-                            </div>
-                        </div>
-
-                        {/* Panning */}
-                        <div className={styles.controlGroup}>
-                            <label>이동</label>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={() => panLeft?.()}>◀ Prev</button>
-                                <button onClick={() => panRight?.()}>Next ▶</button>
+                                <button onClick={clearRange}>Clear Range</button>
                             </div>
                         </div>
                     </div>
                 </div>
 
+                {/* Range mode indicator */}
                 <div style={{ marginBottom: 8 }}>
                     {isRangeMode ? (
                         <div style={{ color: '#f59e0b' }}>
@@ -289,10 +270,12 @@ export default function ModbusPresenter({
                     )}
                 </div>
 
+                {/* Error */}
                 {error && (
                     <div style={{ padding: 12, background: '#f87171', color: '#fff', borderRadius: 8 }}>{error}</div>
                 )}
 
+                {/* Chart */}
                 <div className={styles.chartSection}>
                     <div className={styles.chartToolbar}>
                         <div className={styles.chartTitle}>{LABELS[column]}</div>
@@ -328,6 +311,7 @@ export default function ModbusPresenter({
                     />
                 </div>
 
+                {/* Stats */}
                 <div className={styles.statsGrid}>
                     <div className={styles.statCard}>
                         <div className={styles.statLabel}>평균</div>
@@ -347,6 +331,7 @@ export default function ModbusPresenter({
                     </div>
                 </div>
 
+                {/* Logs */}
                 {logs.length > 0 && (
                     <div className={styles.logPanel}>
                         <div className={styles.logHeader}>📜 Activity Log</div>

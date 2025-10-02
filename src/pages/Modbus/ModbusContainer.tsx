@@ -177,7 +177,7 @@ export default function ModbusContainer() {
     const windowMs = useMemo(() => config.maxPoints * config.intervalMs, [config]);
 
     // pan left/right by one window length
-    const panLeft = () => {
+    const panLeft = useCallback(() => {
         const now = Date.now();
         let sIso: string;
         let eIso: string;
@@ -188,14 +188,14 @@ export default function ModbusContainer() {
             eIso = new Date(e.getTime() - windowMs).toISOString();
         } else {
             // current window is [now - windowMs, now]
-            sIso = new Date(now - windowMs * 2).toISOString(); // pan left: shift window earlier
+            sIso = new Date(now - windowMs * 2).toISOString(); // pan left: earlier
             eIso = new Date(now - windowMs).toISOString();
         }
         setStartAt(toLocalInputString(new Date(sIso)));
         setEndAt(toLocalInputString(new Date(eIso)));
-    };
+    }, [isRangeMode, startAt, endAt, windowMs]);
 
-    const panRight = () => {
+    const panRight = useCallback(() => {
         const now = Date.now();
         let sIso: string;
         let eIso: string;
@@ -210,13 +210,13 @@ export default function ModbusContainer() {
                 sIso = new Date(now - windowMs).toISOString();
             }
         } else {
-            // can't pan "right" beyond now; set to latest window
+            // set to latest window
             eIso = new Date(now).toISOString();
             sIso = new Date(now - windowMs).toISOString();
         }
         setStartAt(toLocalInputString(new Date(sIso)));
         setEndAt(toLocalInputString(new Date(eIso)));
-    };
+    }, [isRangeMode, startAt, endAt, windowMs]);
 
     const setRelativeRange = (minutes: number) => {
         const end = new Date();

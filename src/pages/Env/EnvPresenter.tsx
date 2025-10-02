@@ -1,20 +1,6 @@
-/**
- * EnvPresenter.tsx
- * - Modbus 페이지 UI 패턴에 맞춘 Env(온도/습도) Presenter
- * - 역할: UI 렌더링 전담. 상태/로직은 Container에서 제공.
- *
- * 주요 특징:
- * - 헤더: 장치, 현재값, 서브타이틀(항목 + 줌 라벨)
- * - 컨트롤: 장치 선택, 항목 선택(온도/습도), 줌 인/아웃, 수동 새로고침
- * - 차트: LineChartWrapper 사용, preset 전달로 X축 포맷 제어
- * - 통계: 평균/최대/최소/샘플 수
- * - 로그 패널
- *
- * 주의: Presenter는 데이터 포맷({ bucket: ISOstring, temperature, humidity })을 기대.
- */
-
 import React from 'react';
 import LineChartWrapper from '@/components/charts/LineChartWrapper';
+import ZoomPanControls from '@/components/ui/ZoomPanControls';
 import styles from './Env.module.css';
 
 type Stat = { avg: number | null; max: number | null; min: number | null; count: number };
@@ -28,9 +14,9 @@ type Props = {
     column: Column;
     setColumn: (c: Column) => void;
 
-    zoomLevel: number; // 0..6
+    zoomLevel: number;
     zoomLabel: string;
-    preset?: Preset; // Container가 제공하면 우선 사용
+    preset?: Preset;
 
     onZoomIn: () => void;
     onZoomOut: () => void;
@@ -48,6 +34,16 @@ type Props = {
 
     peakLimits: Record<string, number>;
     setPeakLimits: (p: Record<string, number>) => void;
+
+    startAt?: string | null;
+    endAt?: string | null;
+    setStartAt?: (v: string | null) => void;
+    setEndAt?: (v: string | null) => void;
+    setRelativeRange?: (minutes: number) => void;
+    isRangeMode?: boolean;
+
+    panLeft?: () => void;
+    panRight?: () => void;
 };
 
 const LABELS: Record<Column, string> = { temperature: '온도', humidity: '습도' };
@@ -75,8 +71,15 @@ export default function EnvPresenter({
     logs,
     peakLimits,
     setPeakLimits,
+    startAt,
+    endAt,
+    setStartAt,
+    setEndAt,
+    setRelativeRange,
+    isRangeMode,
+    panLeft,
+    panRight,
 }: Props) {
-    // 로딩/에러 우선 처리
     if (loading)
         return (
             <div className={styles.container}>
@@ -92,21 +95,17 @@ export default function EnvPresenter({
             </div>
         );
 
-    // 최근값 / 이전값, delta 계산
     const last = data?.length ? data[data.length - 1] : null;
     const prev = data?.length > 1 ? data[data.length - 2] : null;
     const currentValue = (last?.[column] ?? null) as number | null;
     const previousValue = (prev?.[column] ?? null) as number | null;
-
     const delta = currentValue != null && previousValue != null ? currentValue - previousValue : 0;
     const changePct =
         previousValue && Number.isFinite(previousValue)
             ? `${((delta / previousValue) * 100 || 0).toFixed(2)}%`
             : '0.00%';
-
     const fmt = (v: number | null, d = 1) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(d) : '-');
 
-    // 임계값(peak) 편집 핸들러 (간단)
     const currentPeakLimit = peakLimits[column];
     const handlePeakLimitChange = (raw: string) => {
         const n = parseFloat(raw);
@@ -121,6 +120,11 @@ export default function EnvPresenter({
     };
 
     const currentStat = stats[column];
+
+    const clearRange = () => {
+        setStartAt?.(null);
+        setEndAt?.(null);
+    };
 
     return (
         <div className={styles.container}>
@@ -146,7 +150,33 @@ export default function EnvPresenter({
 
                 {/* Controls */}
                 <div className={styles.controls}>
-                    <div className={styles.controlsGrid}>
+                    <div style={{ maxWidth: '100%' }}>
+                        <ZoomPanControls
+                            zoom={zoomLevel}
+                            zoomLabel={zoomLabel}
+                            onZoomIn={onZoomIn}
+                            onZoomOut={onZoomOut}
+                            canZoomIn={canZoomIn}
+                            canZoomOut={canZoomOut}
+                            onPanLeft={panLeft}
+                            onPanRight={panRight}
+                            startAt={startAt}
+                            endAt={endAt}
+                            setStartAt={setStartAt}
+                            setEndAt={setEndAt}
+                            setRelativeRange={setRelativeRange}
+                            onRefresh={onManualRefresh}
+                        />
+                    </div>
+
+                    <div
+                        style={{
+                            marginTop: 12,
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                            gap: 12,
+                        }}
+                    >
                         <div className={styles.controlGroup}>
                             <label>Device ID</label>
                             <select value={deviceId} onChange={(e) => setDeviceId(Number(e.target.value))}>
@@ -164,18 +194,6 @@ export default function EnvPresenter({
                                 <option value="temperature">🌡️ 온도 (°C)</option>
                                 <option value="humidity">💧 습도 (%)</option>
                             </select>
-                        </div>
-
-                        <div className={styles.controlGroup}>
-                            <label>Zoom</label>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={onZoomIn} disabled={!canZoomIn}>
-                                    ➕ In
-                                </button>
-                                <button onClick={onZoomOut} disabled={!canZoomOut}>
-                                    ➖ Out
-                                </button>
-                            </div>
                         </div>
 
                         <div className={styles.controlGroup}>
@@ -198,7 +216,9 @@ export default function EnvPresenter({
                         <div className={styles.controlGroup}>
                             <label>&nbsp;</label>
                             <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={onManualRefresh}>🔄 Refresh</button>
+                                <button onClick={onManualRefresh} className="primary">
+                                    🔄 Refresh
+                                </button>
                                 {currentPeakLimit != null && (
                                     <button
                                         onClick={handlePeakLimitRemove}
@@ -207,12 +227,22 @@ export default function EnvPresenter({
                                         🗑️ Remove
                                     </button>
                                 )}
+                                <button onClick={clearRange}>Clear Range</button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Error banner */}
+                <div style={{ marginBottom: 8 }}>
+                    {isRangeMode ? (
+                        <div style={{ color: '#f59e0b' }}>
+                            범위 모드: 수동 기간({startAt} ~ {endAt}) — 실시간 폴링 비활성
+                        </div>
+                    ) : (
+                        <div style={{ color: '#94a3b8' }}>실시간/프리셋 모드</div>
+                    )}
+                </div>
+
                 {error && (
                     <div style={{ padding: 12, background: '#f87171', color: '#fff', borderRadius: 8 }}>{error}</div>
                 )}
@@ -236,7 +266,6 @@ export default function EnvPresenter({
                         keys={[column]}
                         labels={{ [column]: `${LABELS[column]} (${UNITS[column]})` }}
                         xKey="bucket"
-                        // preset이 있으면 우선 사용. 없으면 zoomLevel 매핑.
                         zoomLevel={preset ? undefined : zoomLevel}
                         preset={preset}
                         peakLimit={currentPeakLimit}
@@ -248,14 +277,18 @@ export default function EnvPresenter({
                         onDataPointClick={onDataPointClick}
                         csvExport={{
                             apiPath: '/data/env/query',
-                            extraParams: { deviceid: deviceId },
+                            extraParams: {
+                                deviceid: deviceId,
+                                start: startAt ? new Date(startAt).toISOString() : undefined,
+                                end: endAt ? new Date(endAt).toISOString() : undefined,
+                            },
                             filePrefix: `env-${deviceId}-${column}-${zoomLabel}`,
                         }}
                         height={420}
                     />
                 </div>
 
-                {/* Stats grid */}
+                {/* Stats */}
                 <div className={styles.statsGrid}>
                     <div className={styles.statCard}>
                         <div className={styles.statLabel}>평균</div>

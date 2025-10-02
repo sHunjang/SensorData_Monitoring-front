@@ -1,18 +1,3 @@
-/**
- * SolarContainer.tsx
- * - 목적: SolarPresenter에 전달할 데이터 로드 및 상태 관리
- * - 설계:
- *   - 4단계 줌(1h, 1d, 1w, 1mo) 지원
- *   - 각 줌별 preset, label, realtime 여부, maxPoints, 폴링 주기(intervalMs) 설정
- *   - fetchSolarQuery({ deviceid, preset, maxpoints }) 호출로 데이터 수신
- *   - 데이터 매핑과 stats 계산 제공
- *   - 드릴다운: 1mo -> 1w -> 1d -> 1h
- *
- * 주의:
- * - 백엔드는 bucket을 ISO 문자열로 반환해야 함 (get_cursor 기반 라우터 적용).
- * - realtime이 true인 경우 지정된 interval로 폴링.
- */
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SolarPresenter from './SolarPresenter';
 import { fetchSolarQuery } from '@/api/solar';
@@ -33,10 +18,6 @@ const ZOOMS: Record<
 
 const DEVICE_OPTIONS = [31];
 
-/**
- * calcStats
- * - 단일 컬럼(irradiance)에 대한 평균/최대/최소/카운트 계산
- */
 function calcStats(rows: any[]) {
     const nums = rows
         .map((r) => r?.irradiance)
@@ -51,19 +32,28 @@ function calcStats(rows: any[]) {
     };
 }
 
-/**
- * MAP: API row -> chart row 변환기
- * - 서버가 반환하는 필드(irradiance, bucket)를 그대로 사용.
- * - bucket은 ISO 문자열(또는 Date로 파싱 가능한 값)이어야 함.
- */
 const MAP = (row: any) => ({
     bucket: row.bucket,
     irradiance: typeof row.irradiance === 'number' && Number.isFinite(row.irradiance) ? row.irradiance : null,
 });
 
+function toIsoLocal(value?: string | null) {
+    if (!value) return undefined;
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return undefined;
+    return d.toISOString();
+}
+
+function toLocalInputString(d: Date) {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
+        d.getMinutes()
+    )}`;
+}
+
 export default function SolarContainer() {
     const [deviceId, setDeviceId] = useState<number>(DEVICE_OPTIONS[0]);
-    const [zoom, setZoom] = useState<ZoomLevel>(0); // 기본 1시간
+    const [zoom, setZoom] = useState<ZoomLevel>(0);
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -72,47 +62,63 @@ export default function SolarContainer() {
 
     const [peakLimits, setPeakLimits] = useState<Record<string, number>>({ solar: 1000 });
 
+    const [startAt, setStartAt] = useState<string | null>(null);
+    const [endAt, setEndAt] = useState<string | null>(null);
+    const isRangeMode = Boolean(startAt && endAt);
+
     const config = ZOOMS[zoom];
 
     const log = useCallback((msg: string) => {
         setLogs((prev) => [...prev, `${new Date().toLocaleTimeString('ko-KR')}: ${msg}`].slice(-200));
     }, []);
 
-    /**
-     * load
-     * - fetchSolarQuery를 호출해서 데이터를 받아 MAP으로 변환하고 상태에 저장
-     */
-    const load = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const res = await fetchSolarQuery({
-                deviceid: deviceId,
-                preset: config.preset,
-                maxpoints: config.maxPoints,
-            });
-            const rows = (res?.data ?? []).map(MAP);
-            setData(rows);
-            log(`Loaded ${rows.length} rows (${config.label})`);
-        } catch (e) {
-            const m = getErrorMessage(e);
-            setError(m);
-            log(`Load error: ${m}`);
-        } finally {
-            setLoading(false);
-        }
-    }, [deviceId, config, log]);
+    const load = useCallback(
+        async (opts?: { start?: string; end?: string }) => {
+            setLoading(true);
+            setError(null);
+            try {
+                const params: any = {
+                    deviceid: deviceId,
+                    preset: config.preset,
+                    maxpoints: config.maxPoints,
+                };
+                if (opts?.start) params.start = opts.start;
+                if (opts?.end) params.end = opts.end;
 
-    // 마운트 및 zoom 변경 시 로드, realtime이면 interval 등록
+                const res = await fetchSolarQuery(params);
+                const rows = (res?.data ?? []).map(MAP);
+                setData(rows);
+                log(`Loaded ${rows.length} rows (${config.label})${opts?.start ? ' range' : ''}`);
+            } catch (e) {
+                const m = getErrorMessage(e);
+                setError(m);
+                setData([]);
+                log(`Load error: ${m}`);
+            } finally {
+                setLoading(false);
+            }
+        },
+        [deviceId, config, log]
+    );
+
     useEffect(() => {
-        load();
-        // 기존 타이머 정리
+        const sIso = toIsoLocal(startAt);
+        const eIso = toIsoLocal(endAt);
+
         if (timerRef.current) {
             window.clearInterval(timerRef.current);
             timerRef.current = undefined;
         }
+
+        if (isRangeMode) {
+            load({ start: sIso!, end: eIso! });
+            log(`Range mode: ${sIso} ~ ${eIso}`);
+            return;
+        }
+
+        load();
         if (config.realtime) {
-            timerRef.current = window.setInterval(load, config.intervalMs) as unknown as number;
+            timerRef.current = window.setInterval(() => load(), config.intervalMs) as unknown as number;
             log(`Realtime polling every ${config.intervalMs}ms (${config.label})`);
         } else {
             log(`${config.label} static mode`);
@@ -120,23 +126,58 @@ export default function SolarContainer() {
         return () => {
             if (timerRef.current) window.clearInterval(timerRef.current);
         };
-    }, [load, config, log]);
+    }, [load, config, log, startAt, endAt, isRangeMode]);
 
     const stats = useMemo(() => calcStats(data), [data]);
 
-    // 줌 제어
     const onZoomIn = () => setZoom((z) => (z > 0 ? ((z - 1) as ZoomLevel) : z));
     const onZoomOut = () => setZoom((z) => (z < 3 ? ((z + 1) as ZoomLevel) : z));
 
-    /**
-     * onDataPointClick
-     * - 드릴다운 경로 고정: 1mo -> 1w -> 1d -> 1h
-     * - 더 세밀한 드릴다운은 Modbus와 동일하게 구성 가능
-     */
-    const onDataPointClick = (d: any, t: number) => {
-        if (zoom === 3) setZoom(2);
-        else if (zoom === 2) setZoom(1);
-        else if (zoom === 1) setZoom(0);
+    const windowMs = useMemo(() => config.maxPoints * config.intervalMs, [config]);
+
+    const panLeft = useCallback(() => {
+        const now = Date.now();
+        let sIso: string;
+        let eIso: string;
+        if (isRangeMode) {
+            const s = new Date(toIsoLocal(startAt)!);
+            const e = new Date(toIsoLocal(endAt)!);
+            sIso = new Date(s.getTime() - windowMs).toISOString();
+            eIso = new Date(e.getTime() - windowMs).toISOString();
+        } else {
+            sIso = new Date(now - windowMs * 2).toISOString();
+            eIso = new Date(now - windowMs).toISOString();
+        }
+        setStartAt(toLocalInputString(new Date(sIso)));
+        setEndAt(toLocalInputString(new Date(eIso)));
+    }, [isRangeMode, startAt, endAt, windowMs]);
+
+    const panRight = useCallback(() => {
+        const now = Date.now();
+        let sIso: string;
+        let eIso: string;
+        if (isRangeMode) {
+            const s = new Date(toIsoLocal(startAt)!);
+            const e = new Date(toIsoLocal(endAt)!);
+            sIso = new Date(s.getTime() + windowMs).toISOString();
+            eIso = new Date(e.getTime() + windowMs).toISOString();
+            if (new Date(eIso).getTime() > now) {
+                eIso = new Date(now).toISOString();
+                sIso = new Date(now - windowMs).toISOString();
+            }
+        } else {
+            eIso = new Date(now).toISOString();
+            sIso = new Date(now - windowMs).toISOString();
+        }
+        setStartAt(toLocalInputString(new Date(sIso)));
+        setEndAt(toLocalInputString(new Date(eIso)));
+    }, [isRangeMode, startAt, endAt, windowMs]);
+
+    const setRelativeRange = (minutes: number) => {
+        const end = new Date();
+        const start = new Date(end.getTime() - minutes * 60 * 1000);
+        setStartAt(toLocalInputString(start));
+        setEndAt(toLocalInputString(end));
     };
 
     return (
@@ -151,8 +192,17 @@ export default function SolarContainer() {
             onZoomOut={onZoomOut}
             canZoomIn={zoom > 0}
             canZoomOut={zoom < 3}
-            onDataPointClick={onDataPointClick}
-            onManualRefresh={load}
+            onDataPointClick={(d, t) => {
+                if (zoom === 3) setZoom(2);
+                else if (zoom === 2) setZoom(1);
+                else if (zoom === 1) setZoom(0);
+            }}
+            onManualRefresh={() => {
+                const s = toIsoLocal(startAt);
+                const e = toIsoLocal(endAt);
+                if (s && e) load({ start: s, end: e });
+                else load();
+            }}
             data={data}
             stats={stats}
             loading={loading}
@@ -160,6 +210,14 @@ export default function SolarContainer() {
             logs={logs}
             peakLimits={peakLimits}
             setPeakLimits={setPeakLimits}
+            startAt={startAt}
+            endAt={endAt}
+            setStartAt={setStartAt}
+            setEndAt={setEndAt}
+            setRelativeRange={setRelativeRange}
+            isRangeMode={isRangeMode}
+            panLeft={panLeft}
+            panRight={panRight}
         />
     );
 }
