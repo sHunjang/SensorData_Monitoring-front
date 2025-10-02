@@ -1,0 +1,30 @@
+/* LogPanel.module.css
+   - 자동 스크롤용 div 높이 고정
+   - monospace 폰트로 로그 표시
+*/
+.wrap {
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    overflow: hidden;
+}
+.header {
+    padding: 8px 12px;
+    background: #fafafa;
+    border-bottom: 1px solid #eee;
+    font-weight: 600;
+}
+.body {
+    height: 160px;
+    overflow: auto;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12px;
+    padding: 8px 12px;
+    white-space: pre-wrap;
+}
+.empty {
+    color: #999;
+    padding: 8px;
+}
+.line {
+    padding: 2px 0;
+}
