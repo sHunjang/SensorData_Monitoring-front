@@ -1,17 +1,9 @@
-/**
- * ModbusPresenter.tsx
- * - 목적: Modbus 페이지 UI (ModbusContainer가 상태/데이터 제공)
- * - 변경점: 측정 항목 select에 optgroup 적용. select value는 snake_case 키(ex: active_power).
- * - 차트/통계/헤더는 선택된 column에 따라 동작.
- */
-
 import React from 'react';
 import LineChartWrapper from '@/components/charts/LineChartWrapper';
 import styles from './Modbus.module.css';
 
 type Stat = { avg: number | null; max: number | null; min: number | null; count: number };
 
-// permitted column keys (snake_case used in select)
 type Column =
     | 'active_power'
     | 'reactive_power'
@@ -24,6 +16,8 @@ type Column =
     | 'reactive_energy'
     | 'apparent_energy';
 
+type Preset = '10s' | '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
+
 type Props = {
     deviceId: number;
     setDeviceId: (id: number) => void;
@@ -32,19 +26,30 @@ type Props = {
     setColumn: (c: Column) => void;
     zoomLevel: number;
     zoomLabel: string;
+    preset?: Preset;
     onZoomIn: () => void;
     onZoomOut: () => void;
     canZoomIn: boolean;
     canZoomOut: boolean;
     onDataPointClick?: (d: any, t: number) => void;
     onManualRefresh: () => void;
-    data: any[]; // each row has bucket and keys named like Column above
+    data: any[];
     stats: Record<Column, Stat>;
     loading: boolean;
     error: string | null;
     logs: string[];
     peakLimits: Record<string, number>;
     setPeakLimits: (p: Record<string, number>) => void;
+
+    startAt?: string | null;
+    endAt?: string | null;
+    setStartAt?: (v: string | null) => void;
+    setEndAt?: (v: string | null) => void;
+    setRelativeRange?: (minutes: number) => void;
+    isRangeMode?: boolean;
+
+    panLeft?: () => void;
+    panRight?: () => void;
 };
 
 const LABELS: Record<Column, string> = {
@@ -68,6 +73,7 @@ export default function ModbusPresenter({
     setColumn,
     zoomLevel,
     zoomLabel,
+    preset,
     onZoomIn,
     onZoomOut,
     canZoomIn,
@@ -81,10 +87,59 @@ export default function ModbusPresenter({
     logs,
     peakLimits,
     setPeakLimits,
+    startAt,
+    endAt,
+    setStartAt,
+    setEndAt,
+    setRelativeRange,
+    isRangeMode,
+    panLeft,
+    panRight,
 }: Props) {
+    if (loading)
+        return (
+            <div className={styles.container}>
+                <div className={styles.content}>로딩 중...</div>
+            </div>
+        );
+    if (error)
+        return (
+            <div className={styles.container}>
+                <div className={styles.content} style={{ padding: 16, color: '#f87171' }}>
+                    {error}
+                </div>
+            </div>
+        );
+
     const currentStat = stats[column];
-    const currentValue = data.length ? data[data.length - 1]?.[column] ?? null : null;
-    const fmt = (v: number | null) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '-');
+    const last = data?.length ? data[data.length - 1] : null;
+    const prev = data?.length > 1 ? data[data.length - 2] : null;
+    const currentValue = (last?.[column] ?? null) as number | null;
+    const previousValue = (prev?.[column] ?? null) as number | null;
+    const delta = currentValue != null && previousValue != null ? currentValue - previousValue : 0;
+    const changePct =
+        previousValue && Number.isFinite(previousValue)
+            ? `${((delta / previousValue) * 100 || 0).toFixed(2)}%`
+            : '0.00%';
+    const fmt = (v: number | null, d = 2) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(d) : '-');
+
+    const currentPeakLimit = peakLimits[column];
+    const handlePeakLimitChange = (raw: string) => {
+        const n = parseFloat(raw);
+        if (!isNaN(n) && Number.isFinite(n)) {
+            setPeakLimits({ ...peakLimits, [column]: n });
+        }
+    };
+    const handlePeakLimitRemove = () => {
+        const copy = { ...peakLimits };
+        delete copy[column];
+        setPeakLimits(copy);
+    };
+
+    const clearRange = () => {
+        setStartAt?.(null);
+        setEndAt?.(null);
+    };
 
     return (
         <div className={styles.container}>
@@ -100,8 +155,9 @@ export default function ModbusPresenter({
 
                     <div className={styles.priceInfo}>
                         <p className={styles.currentPrice}>{fmt(currentValue)}</p>
-                        <p className={styles.priceChange}>
-                            <span>▲</span> Live
+                        <p className={styles.priceChange} style={{ color: delta >= 0 ? '#0ecb81' : '#f6465d' }}>
+                            <span>{delta >= 0 ? '▲' : '▼'}</span> {changePct} ({delta >= 0 ? '+' : ''}
+                            {fmt(delta)})
                         </p>
                     </div>
                 </div>
@@ -120,7 +176,6 @@ export default function ModbusPresenter({
                             </select>
                         </div>
 
-                        {/* 데이터 타입 선택: optgroup 구조 그대로 사용 */}
                         <div className={styles.controlGroup}>
                             <label>측정 항목</label>
                             <select value={column} onChange={(e) => setColumn(e.target.value as Column)}>
@@ -158,29 +213,94 @@ export default function ModbusPresenter({
                         </div>
 
                         <div className={styles.controlGroup}>
+                            <label>임계값</label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                value={currentPeakLimit ?? ''}
+                                onChange={(e) => handlePeakLimitChange(e.target.value)}
+                                placeholder="예: 10.0"
+                            />
+                        </div>
+
+                        <div className={styles.controlGroup}>
                             <label>&nbsp;</label>
-                            <button onClick={onManualRefresh} disabled={loading}>
-                                🔄 Refresh
-                            </button>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="primary" onClick={onManualRefresh}>
+                                    🔄 Refresh
+                                </button>
+                                {currentPeakLimit != null && (
+                                    <button
+                                        onClick={handlePeakLimitRemove}
+                                        style={{ background: '#f6465d', color: '#fff' }}
+                                    >
+                                        🗑️ Remove
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Range selection controls */}
+                        <div className={styles.controlGroup}>
+                            <label>기간 선택</label>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <input
+                                    type="datetime-local"
+                                    value={startAt ?? ''}
+                                    onChange={(e) => setStartAt?.(e.target.value || null)}
+                                />
+                                <span>~</span>
+                                <input
+                                    type="datetime-local"
+                                    value={endAt ?? ''}
+                                    onChange={(e) => setEndAt?.(e.target.value || null)}
+                                />
+                            </div>
+                        </div>
+
+                        <div className={styles.controlGroup}>
+                            <label>빠른 범위</label>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => setRelativeRange?.(60)}>Last 1h</button>
+                                <button onClick={() => setRelativeRange?.(24 * 60)}>Last 24h</button>
+                                <button onClick={() => setRelativeRange?.(7 * 24 * 60)}>Last 7d</button>
+                                <button onClick={clearRange}>Clear</button>
+                            </div>
+                        </div>
+
+                        {/* Panning */}
+                        <div className={styles.controlGroup}>
+                            <label>이동</label>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => panLeft?.()}>◀ Prev</button>
+                                <button onClick={() => panRight?.()}>Next ▶</button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* 에러 배너 */}
+                <div style={{ marginBottom: 8 }}>
+                    {isRangeMode ? (
+                        <div style={{ color: '#f59e0b' }}>
+                            범위 모드: 수동 기간({startAt} ~ {endAt}) — 실시간 폴링 비활성
+                        </div>
+                    ) : (
+                        <div style={{ color: '#94a3b8' }}>실시간/프리셋 모드</div>
+                    )}
+                </div>
+
                 {error && (
-                    <div
-                        style={{ padding: 12, background: '#f87171', color: '#fff', borderRadius: 8, marginBottom: 8 }}
-                    >
-                        {error}
-                    </div>
+                    <div style={{ padding: 12, background: '#f87171', color: '#fff', borderRadius: 8 }}>{error}</div>
                 )}
 
-                {/* Chart */}
                 <div className={styles.chartSection}>
                     <div className={styles.chartToolbar}>
                         <div className={styles.chartTitle}>{LABELS[column]}</div>
                         <div className={styles.chartControls}>
                             <span style={{ fontSize: 11, color: '#94a3b8' }}>Points: {data.length}</span>
+                            {currentPeakLimit != null && (
+                                <span style={{ marginLeft: 8, color: '#f6465d' }}>Limit: {currentPeakLimit}</span>
+                            )}
                         </div>
                     </div>
 
@@ -189,13 +309,25 @@ export default function ModbusPresenter({
                         keys={[column]}
                         labels={{ [column]: LABELS[column] }}
                         xKey="bucket"
-                        onDataPointClick={onDataPointClick}
                         zoomLevel={zoomLevel}
-                        // preset is controlled by container; Presenter doesn't need to pass it here.
+                        preset={preset}
+                        peakLimit={currentPeakLimit}
+                        peakLimitLabel={currentPeakLimit ? `${LABELS[column]} 임계값: ${currentPeakLimit}` : undefined}
+                        onDataPointClick={onDataPointClick}
+                        csvExport={{
+                            apiPath: '/data/modbus/query',
+                            extraParams: {
+                                deviceid: deviceId,
+                                preset,
+                                start: startAt ? new Date(startAt).toISOString() : undefined,
+                                end: endAt ? new Date(endAt).toISOString() : undefined,
+                            },
+                            filePrefix: `modbus-${deviceId}-${column}-${zoomLabel}`,
+                        }}
+                        height={420}
                     />
                 </div>
 
-                {/* Stats */}
                 <div className={styles.statsGrid}>
                     <div className={styles.statCard}>
                         <div className={styles.statLabel}>평균</div>
@@ -215,13 +347,12 @@ export default function ModbusPresenter({
                     </div>
                 </div>
 
-                {/* Logs */}
                 {logs.length > 0 && (
                     <div className={styles.logPanel}>
                         <div className={styles.logHeader}>📜 Activity Log</div>
-                        {logs.slice(-10).map((log, i) => (
+                        {logs.slice(-10).map((logItem, i) => (
                             <div key={i} className={styles.logItem}>
-                                {log}
+                                {logItem}
                             </div>
                         ))}
                     </div>
