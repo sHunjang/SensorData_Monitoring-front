@@ -3,20 +3,27 @@ import SolarPresenter from './SolarPresenter';
 import { fetchSolarQuery } from '@/api/solar';
 import { getErrorMessage } from '@/lib/http';
 
-type ZoomLevel = 0 | 1 | 2 | 3;
-type Preset = '1h' | '1d' | '1w' | '1mo';
+type Preset = '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
+type ZoomLevel = 0 | 1 | 2 | 3 | 4 | 5;
 
 const ZOOMS: Record<
     ZoomLevel,
     { preset: Preset; label: string; realtime: boolean; maxPoints: number; intervalMs: number }
 > = {
-    0: { preset: '1h', label: '1시간', realtime: true, maxPoints: 60, intervalMs: 30000 },
-    1: { preset: '1d', label: '1일', realtime: true, maxPoints: 1440, intervalMs: 60000 },
-    2: { preset: '1w', label: '1주', realtime: false, maxPoints: 336, intervalMs: 60000 },
-    3: { preset: '1mo', label: '1개월', realtime: false, maxPoints: 31, intervalMs: 60000 },
+    0: { preset: '1m', label: '1분', realtime: true, maxPoints: 120, intervalMs: 15000 },
+    1: { preset: '15m', label: '15분', realtime: true, maxPoints: 60, intervalMs: 20000 },
+    2: { preset: '1h', label: '1시간', realtime: true, maxPoints: 60, intervalMs: 30000 },
+    3: { preset: '1d', label: '1일', realtime: false, maxPoints: 1440, intervalMs: 60000 },
+    4: { preset: '1w', label: '1주', realtime: false, maxPoints: 336, intervalMs: 60000 },
+    5: { preset: '1mo', label: '1개월', realtime: false, maxPoints: 31, intervalMs: 60000 },
 };
 
 const DEVICE_OPTIONS = [31];
+
+const MAP = (row: any) => ({
+    bucket: row.bucket,
+    irradiance: typeof row.irradiance === 'number' && Number.isFinite(row.irradiance) ? row.irradiance : null,
+});
 
 function calcStats(rows: any[]) {
     const nums = rows
@@ -31,11 +38,6 @@ function calcStats(rows: any[]) {
         count: nums.length,
     };
 }
-
-const MAP = (row: any) => ({
-    bucket: row.bucket,
-    irradiance: typeof row.irradiance === 'number' && Number.isFinite(row.irradiance) ? row.irradiance : null,
-});
 
 function toIsoLocal(value?: string | null) {
     if (!value) return undefined;
@@ -52,20 +54,18 @@ function toLocalInputString(d: Date) {
 }
 
 export default function SolarContainer() {
-    const [deviceId, setDeviceId] = useState<number>(DEVICE_OPTIONS[0]);
+    const [deviceId, setDeviceId] = useState(DEVICE_OPTIONS[0]);
     const [zoom, setZoom] = useState<ZoomLevel>(0);
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [logs, setLogs] = useState<string[]>([]);
     const timerRef = useRef<number | undefined>(undefined);
-
     const [peakLimits, setPeakLimits] = useState<Record<string, number>>({ solar: 1000 });
-
     const [startAt, setStartAt] = useState<string | null>(null);
     const [endAt, setEndAt] = useState<string | null>(null);
-    const isRangeMode = Boolean(startAt && endAt);
 
+    const isRangeMode = Boolean(startAt && endAt);
     const config = ZOOMS[zoom];
 
     const log = useCallback((msg: string) => {
@@ -119,10 +119,11 @@ export default function SolarContainer() {
         load();
         if (config.realtime) {
             timerRef.current = window.setInterval(() => load(), config.intervalMs) as unknown as number;
-            log(`Realtime polling every ${config.intervalMs}ms (${config.label})`);
+            log(`Realtime polling ${config.intervalMs}ms`);
         } else {
-            log(`${config.label} static mode`);
+            log(`${config.label} static`);
         }
+
         return () => {
             if (timerRef.current) window.clearInterval(timerRef.current);
         };
@@ -139,6 +140,7 @@ export default function SolarContainer() {
         const now = Date.now();
         let sIso: string;
         let eIso: string;
+
         if (isRangeMode) {
             const s = new Date(toIsoLocal(startAt)!);
             const e = new Date(toIsoLocal(endAt)!);
@@ -148,6 +150,7 @@ export default function SolarContainer() {
             sIso = new Date(now - windowMs * 2).toISOString();
             eIso = new Date(now - windowMs).toISOString();
         }
+
         setStartAt(toLocalInputString(new Date(sIso)));
         setEndAt(toLocalInputString(new Date(eIso)));
     }, [isRangeMode, startAt, endAt, windowMs]);
@@ -156,6 +159,7 @@ export default function SolarContainer() {
         const now = Date.now();
         let sIso: string;
         let eIso: string;
+
         if (isRangeMode) {
             const s = new Date(toIsoLocal(startAt)!);
             const e = new Date(toIsoLocal(endAt)!);
@@ -169,6 +173,7 @@ export default function SolarContainer() {
             eIso = new Date(now).toISOString();
             sIso = new Date(now - windowMs).toISOString();
         }
+
         setStartAt(toLocalInputString(new Date(sIso)));
         setEndAt(toLocalInputString(new Date(eIso)));
     }, [isRangeMode, startAt, endAt, windowMs]);
@@ -192,7 +197,7 @@ export default function SolarContainer() {
             onZoomOut={onZoomOut}
             canZoomIn={zoom > 0}
             canZoomOut={zoom < 3}
-            onDataPointClick={(d, t) => {
+            onDataPointClick={(_d, _t) => {
                 if (zoom === 3) setZoom(2);
                 else if (zoom === 2) setZoom(1);
                 else if (zoom === 1) setZoom(0);

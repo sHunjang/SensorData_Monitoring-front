@@ -17,7 +17,7 @@ type Column =
     | 'reactive_energy'
     | 'apparent_energy';
 
-type Preset = '1m' | '15m' | '1h' | '1d' | '1w' | '1mo' | '6mo' | '1y';
+type Preset = '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
 
 type Props = {
     deviceId: number;
@@ -25,20 +25,25 @@ type Props = {
     deviceOptions: number[];
     column: Column;
     setColumn: (c: Column) => void;
+
     zoomLevel: number;
     zoomLabel: string;
     preset?: Preset;
+
     onZoomIn: () => void;
     onZoomOut: () => void;
     canZoomIn: boolean;
     canZoomOut: boolean;
+
     onDataPointClick?: (d: any, t: number) => void;
     onManualRefresh: () => void;
+
     data: any[];
     stats: Record<Column, Stat>;
     loading: boolean;
     error: string | null;
     logs: string[];
+
     peakLimits: Record<string, number>;
     setPeakLimits: (p: Record<string, number>) => void;
 
@@ -54,16 +59,29 @@ type Props = {
 };
 
 const LABELS: Record<Column, string> = {
-    active_power: '유효전력 (kW)',
-    reactive_power: '무효전력 (kVAR)',
-    apparent_power: '피상전력 (kVA)',
-    voltage_ll: '선간전압 (V)',
-    voltage_ln: '상전압 (V)',
-    current: '전류 (A)',
+    active_power: '유효전력',
+    reactive_power: '무효전력',
+    apparent_power: '피상전력',
+    voltage_ll: '선간전압',
+    voltage_ln: '상전압',
+    current: '전류',
     power_factor: '역률',
-    active_energy: '유효전력량 (kWh)',
-    reactive_energy: '무효전력량 (kVArh)',
-    apparent_energy: '피상전력량 (kVAh)',
+    active_energy: '유효전력량',
+    reactive_energy: '무효전력량',
+    apparent_energy: '피상전력량',
+};
+
+const UNITS: Record<Column, string> = {
+    active_power: 'kW',
+    reactive_power: 'kVAR',
+    apparent_power: 'kVA',
+    voltage_ll: 'V',
+    voltage_ln: 'V',
+    current: 'A',
+    power_factor: '',
+    active_energy: 'kWh',
+    reactive_energy: 'kVArh',
+    apparent_energy: 'kVAh',
 };
 
 export default function ModbusPresenter({
@@ -112,7 +130,6 @@ export default function ModbusPresenter({
             </div>
         );
 
-    const currentStat = stats[column];
     const last = data?.length ? data[data.length - 1] : null;
     const prev = data?.length > 1 ? data[data.length - 2] : null;
     const currentValue = (last?.[column] ?? null) as number | null;
@@ -137,6 +154,8 @@ export default function ModbusPresenter({
         setPeakLimits(copy);
     };
 
+    const currentStat = stats[column];
+
     const clearRange = () => {
         setStartAt?.(null);
         setEndAt?.(null);
@@ -153,9 +172,10 @@ export default function ModbusPresenter({
                             {LABELS[column]} · {zoomLabel}
                         </p>
                     </div>
-
                     <div className={styles.priceInfo}>
-                        <p className={styles.currentPrice}>{fmt(currentValue)}</p>
+                        <p className={styles.currentPrice}>
+                            {fmt(currentValue)} <span style={{ fontSize: 12 }}>{UNITS[column]}</span>
+                        </p>
                         <p className={styles.priceChange} style={{ color: delta >= 0 ? '#0ecb81' : '#f6465d' }}>
                             <span>{delta >= 0 ? '▲' : '▼'}</span> {changePct} ({delta >= 0 ? '+' : ''}
                             {fmt(delta)})
@@ -163,7 +183,7 @@ export default function ModbusPresenter({
                     </div>
                 </div>
 
-                {/* Controls: ZoomPanControls 사용 */}
+                {/* Controls */}
                 <div className={styles.controls}>
                     <div style={{ maxWidth: '100%' }}>
                         <ZoomPanControls
@@ -184,7 +204,6 @@ export default function ModbusPresenter({
                         />
                     </div>
 
-                    {/* small extra controls for device/column/peak limit */}
                     <div
                         style={{
                             marginTop: 12,
@@ -198,7 +217,7 @@ export default function ModbusPresenter({
                             <select value={deviceId} onChange={(e) => setDeviceId(Number(e.target.value))}>
                                 {deviceOptions.map((id) => (
                                     <option key={id} value={id}>
-                                        {id}
+                                        센서 {id}
                                     </option>
                                 ))}
                             </select>
@@ -229,13 +248,19 @@ export default function ModbusPresenter({
                         </div>
 
                         <div className={styles.controlGroup}>
-                            <label>임계값</label>
+                            <label>임계값 ({UNITS[column]})</label>
                             <input
                                 type="number"
                                 step="0.1"
                                 value={currentPeakLimit ?? ''}
                                 onChange={(e) => handlePeakLimitChange(e.target.value)}
                                 placeholder="예: 10.0"
+                                style={{
+                                    background: '#2b2f36',
+                                    border: '1px solid #2e3238',
+                                    color: '#f7f8fa',
+                                    padding: '8px',
+                                }}
                             />
                         </div>
 
@@ -259,7 +284,6 @@ export default function ModbusPresenter({
                     </div>
                 </div>
 
-                {/* Range mode indicator */}
                 <div style={{ marginBottom: 8 }}>
                     {isRangeMode ? (
                         <div style={{ color: '#f59e0b' }}>
@@ -270,7 +294,6 @@ export default function ModbusPresenter({
                     )}
                 </div>
 
-                {/* Error */}
                 {error && (
                     <div style={{ padding: 12, background: '#f87171', color: '#fff', borderRadius: 8 }}>{error}</div>
                 )}
@@ -278,7 +301,9 @@ export default function ModbusPresenter({
                 {/* Chart */}
                 <div className={styles.chartSection}>
                     <div className={styles.chartToolbar}>
-                        <div className={styles.chartTitle}>{LABELS[column]}</div>
+                        <div className={styles.chartTitle}>
+                            {LABELS[column]} ({UNITS[column]})
+                        </div>
                         <div className={styles.chartControls}>
                             <span style={{ fontSize: 11, color: '#94a3b8' }}>Points: {data.length}</span>
                             {currentPeakLimit != null && (
@@ -290,11 +315,15 @@ export default function ModbusPresenter({
                     <LineChartWrapper
                         data={data}
                         keys={[column]}
-                        labels={{ [column]: LABELS[column] }}
+                        labels={{ [column]: `${LABELS[column]} (${UNITS[column]})` }}
                         xKey="bucket"
                         preset={preset}
                         peakLimit={currentPeakLimit}
-                        peakLimitLabel={currentPeakLimit ? `${LABELS[column]} 임계값: ${currentPeakLimit}` : undefined}
+                        peakLimitLabel={
+                            currentPeakLimit
+                                ? `${LABELS[column]} 임계값: ${currentPeakLimit}${UNITS[column]}`
+                                : undefined
+                        }
                         onDataPointClick={onDataPointClick}
                         csvExport={{
                             filename: `modbus-${deviceId}-${column}-${zoomLabel}.csv`,
@@ -308,33 +337,35 @@ export default function ModbusPresenter({
                 <div className={styles.statsGrid}>
                     <div className={styles.statCard}>
                         <div className={styles.statLabel}>평균</div>
-                        <div className={styles.statValue}>{fmt(currentStat?.avg)}</div>
+                        <div className={styles.statValue}>{fmt(currentStat.avg)}</div>
                     </div>
                     <div className={styles.statCard}>
                         <div className={styles.statLabel}>최대</div>
-                        <div className={styles.statValue}>{fmt(currentStat?.max)}</div>
+                        <div className={styles.statValue}>{fmt(currentStat.max)}</div>
                     </div>
                     <div className={styles.statCard}>
                         <div className={styles.statLabel}>최소</div>
-                        <div className={styles.statValue}>{fmt(currentStat?.min)}</div>
+                        <div className={styles.statValue}>{fmt(currentStat.min)}</div>
                     </div>
                     <div className={styles.statCard}>
                         <div className={styles.statLabel}>샘플 수</div>
-                        <div className={styles.statValue}>{currentStat?.count ?? 0}</div>
+                        <div className={styles.statValue}>{currentStat.count ?? 0}</div>
                     </div>
                 </div>
 
                 {/* Logs */}
-                {logs.length > 0 && (
-                    <div className={styles.logPanel}>
-                        <div className={styles.logHeader}>📜 Activity Log</div>
-                        {logs.slice(-10).map((logItem, i) => (
+                <div className={styles.logPanel}>
+                    <div className={styles.logHeader}>📜 Activity Log</div>
+                    {logs.length ? (
+                        logs.slice(-20).map((l, i) => (
                             <div key={i} className={styles.logItem}>
-                                {logItem}
+                                {l}
                             </div>
-                        ))}
-                    </div>
-                )}
+                        ))
+                    ) : (
+                        <div className={styles.logItem}>최근 활동 없음</div>
+                    )}
+                </div>
             </div>
         </div>
     );

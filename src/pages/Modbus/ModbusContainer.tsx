@@ -3,20 +3,19 @@ import ModbusPresenter from './ModbusPresenter';
 import { fetchModbusQuery } from '@/api/modbus';
 import { getErrorMessage } from '@/lib/http';
 
-type Preset = '10s' | '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
-type ZoomLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+type Preset = '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
+type ZoomLevel = 0 | 1 | 2 | 3 | 4 | 5;
 
 const ZOOMS: Record<
     ZoomLevel,
     { preset: Preset; label: string; realtime: boolean; maxPoints: number; intervalMs: number }
 > = {
-    0: { preset: '10s', label: '10초', realtime: true, maxPoints: 60, intervalMs: 10000 },
-    1: { preset: '1m', label: '1분', realtime: true, maxPoints: 120, intervalMs: 15000 },
-    2: { preset: '15m', label: '15분', realtime: true, maxPoints: 60, intervalMs: 20000 },
-    3: { preset: '1h', label: '1시간', realtime: true, maxPoints: 60, intervalMs: 30000 },
-    4: { preset: '1d', label: '1일', realtime: false, maxPoints: 1440, intervalMs: 60000 },
-    5: { preset: '1w', label: '1주', realtime: false, maxPoints: 336, intervalMs: 60000 },
-    6: { preset: '1mo', label: '1개월', realtime: false, maxPoints: 31, intervalMs: 60000 },
+    0: { preset: '1m', label: '1분', realtime: true, maxPoints: 1, intervalMs: 15000 },
+    1: { preset: '15m', label: '15분', realtime: true, maxPoints: 1, intervalMs: 20000 },
+    2: { preset: '1h', label: '1시간', realtime: true, maxPoints: 1, intervalMs: 30000 },
+    3: { preset: '1d', label: '1일', realtime: false, maxPoints: 1, intervalMs: 60000 },
+    4: { preset: '1w', label: '1주', realtime: false, maxPoints: 1, intervalMs: 60000 },
+    5: { preset: '1mo', label: '1개월', realtime: false, maxPoints: 1, intervalMs: 60000 },
 };
 
 const DEVICE_OPTIONS = [11, 12, 13, 14, 15];
@@ -63,7 +62,7 @@ function toLocalInputString(d: Date) {
 }
 
 export default function ModbusContainer() {
-    const [deviceId, setDeviceId] = useState<number>(DEVICE_OPTIONS[0]);
+    const [deviceId, setDeviceId] = useState(DEVICE_OPTIONS[0]);
     const [zoom, setZoom] = useState<ZoomLevel>(3);
     const [column, setColumn] = useState<
         | 'active_power'
@@ -77,19 +76,16 @@ export default function ModbusContainer() {
         | 'reactive_energy'
         | 'apparent_energy'
     >('active_power');
-
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [logs, setLogs] = useState<string[]>([]);
     const timerRef = useRef<number | undefined>(undefined);
-
     const [peakLimits, setPeakLimits] = useState<Record<string, number>>({});
-
-    const [startAt, setStartAt] = useState<string | null>(null); // datetime-local string
+    const [startAt, setStartAt] = useState<string | null>(null);
     const [endAt, setEndAt] = useState<string | null>(null);
-    const isRangeMode = Boolean(startAt && endAt);
 
+    const isRangeMode = Boolean(startAt && endAt);
     const config = ZOOMS[zoom];
 
     const log = useCallback((msg: string) => {
@@ -143,10 +139,11 @@ export default function ModbusContainer() {
         load();
         if (config.realtime) {
             timerRef.current = window.setInterval(() => load(), config.intervalMs) as unknown as number;
-            log(`Realtime polling every ${config.intervalMs}ms`);
+            log(`Realtime polling ${config.intervalMs}ms`);
         } else {
             log(`${config.label} static`);
         }
+
         return () => {
             if (timerRef.current) window.clearInterval(timerRef.current);
         };
@@ -167,30 +164,29 @@ export default function ModbusContainer() {
         ];
         const s: Record<string, any> = {};
         for (const k of keys) s[k] = calcStats(data, k);
-        return s as Record<string, any>;
+        return s;
     }, [data]);
 
     const onZoomIn = () => setZoom((z) => (z > 0 ? ((z - 1) as ZoomLevel) : z));
     const onZoomOut = () => setZoom((z) => (z < 6 ? ((z + 1) as ZoomLevel) : z));
 
-    // window duration derived from config
     const windowMs = useMemo(() => config.maxPoints * config.intervalMs, [config]);
 
-    // pan left/right by one window length
     const panLeft = useCallback(() => {
         const now = Date.now();
         let sIso: string;
         let eIso: string;
+
         if (isRangeMode) {
             const s = new Date(toIsoLocal(startAt)!);
             const e = new Date(toIsoLocal(endAt)!);
             sIso = new Date(s.getTime() - windowMs).toISOString();
             eIso = new Date(e.getTime() - windowMs).toISOString();
         } else {
-            // current window is [now - windowMs, now]
-            sIso = new Date(now - windowMs * 2).toISOString(); // pan left: earlier
+            sIso = new Date(now - windowMs * 2).toISOString();
             eIso = new Date(now - windowMs).toISOString();
         }
+
         setStartAt(toLocalInputString(new Date(sIso)));
         setEndAt(toLocalInputString(new Date(eIso)));
     }, [isRangeMode, startAt, endAt, windowMs]);
@@ -199,21 +195,21 @@ export default function ModbusContainer() {
         const now = Date.now();
         let sIso: string;
         let eIso: string;
+
         if (isRangeMode) {
             const s = new Date(toIsoLocal(startAt)!);
             const e = new Date(toIsoLocal(endAt)!);
             sIso = new Date(s.getTime() + windowMs).toISOString();
             eIso = new Date(e.getTime() + windowMs).toISOString();
-            // prevent moving into future
             if (new Date(eIso).getTime() > now) {
                 eIso = new Date(now).toISOString();
                 sIso = new Date(now - windowMs).toISOString();
             }
         } else {
-            // set to latest window
             eIso = new Date(now).toISOString();
             sIso = new Date(now - windowMs).toISOString();
         }
+
         setStartAt(toLocalInputString(new Date(sIso)));
         setEndAt(toLocalInputString(new Date(eIso)));
     }, [isRangeMode, startAt, endAt, windowMs]);
@@ -240,9 +236,9 @@ export default function ModbusContainer() {
             canZoomIn={zoom > 0}
             canZoomOut={zoom < 6}
             onDataPointClick={(_d, _t) => {
-                if (zoom === 6) setZoom(5);
-                else if (zoom === 5) setZoom(4);
+                if (zoom === 5) setZoom(4);
                 else if (zoom === 4) setZoom(3);
+                else if (zoom === 3) setZoom(2);
             }}
             onManualRefresh={() => {
                 const s = toIsoLocal(startAt);
@@ -251,7 +247,7 @@ export default function ModbusContainer() {
                 else load();
             }}
             data={data}
-            stats={stats}
+            stats={stats as any}
             loading={loading}
             error={error}
             logs={logs}

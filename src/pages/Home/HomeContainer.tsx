@@ -1,11 +1,7 @@
 /**
  * HomeContainer.tsx
  * - 목적: Presenter 에 전달할 요약 값들을 폴링해서 수집.
- * - 설계:
- *   1) Modbus: 1m preset 최근 60개 포인트에서 마지막을 현재 전력으로 사용
- *   2) Modbus: 1m preset 최근 1440개 포인트(1일)에서 에너지 차이로 당일 누적 계산
- *   3) Env/Solar: 최신 1포인트(preset=1m) 조회
- *   4) 각 호출은 실패 시 에러 상태를 설정하고 Presenter에게 전달
+ * - Backend 응답 형식에 맞춤 (bucket, power, energy, temperature, humidity, irradiance)
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -43,7 +39,7 @@ export default function HomeContainer() {
 
     // 폴링 함수 (한 번에 모든 항목 조회)
     const poll = useCallback(async () => {
-        // 1) Modbus: 최근 1분 데이터에서 마지막 포인트를 현재 전력으로 사용
+        // 1) Modbus: 최근 1시간 데이터에서 마지막 포인트를 현재 전력으로 사용
         (async () => {
             try {
                 setPowerError(null);
@@ -51,25 +47,28 @@ export default function HomeContainer() {
                 const rows = res?.data && Array.isArray(res.data) ? res.data : [];
                 const last = rows.length ? rows[rows.length - 1] : null;
 
-                // power 필드 찾기
-                const powerValue = last?.power ?? null;
-                setPower(safeNum(powerValue, 2));
+                // ✅ Backend 필드명: power
+                const v = last?.power ?? null;
+                setPower(safeNum(v, 2));
             } catch (e) {
                 setPower(null);
                 setPowerError(getErrorMessage(e));
             }
         })();
 
-        // 2) Modbus: 당일 누적 근사 (1d preset 의 최댓값 - 최솟값)
+        // 2) Modbus: 당일 누적 근사 (최댓값 - 최솟값)
         (async () => {
             try {
                 setTodayError(null);
                 const res = await fetchModbusQuery({ deviceid: MODBUS_ID, preset: '1m', maxpoints: 1440 });
                 const rows = res?.data && Array.isArray(res.data) ? res.data : [];
+
+                // ✅ Backend 필드명: energy
                 const nums = rows
                     .map((r: any) => r?.energy ?? null)
                     .map((x: any) => Number(x))
                     .filter((n: number) => Number.isFinite(n));
+
                 const kwh = nums.length ? Number((Math.max(...nums) - Math.min(...nums)).toFixed(2)) : null;
                 setTodayKwh(kwh);
             } catch (e) {
@@ -78,7 +77,7 @@ export default function HomeContainer() {
             }
         })();
 
-        // 3) Env: 최신 1건 (preset=1m, maxpoints=1)
+        // 3) Env: 최신 1건
         (async () => {
             try {
                 setEnvError(null);
@@ -86,8 +85,12 @@ export default function HomeContainer() {
                 const rows = res?.data && Array.isArray(res.data) ? res.data : [];
                 const last = rows.length ? rows[rows.length - 1] : null;
 
-                setTemperature(safeNum(last?.temperature, 1));
-                setHumidity(safeNum(last?.humidity, 1));
+                // ✅ Backend 필드명: temperature, humidity
+                const t = last?.temperature ?? null;
+                const h = last?.humidity ?? null;
+
+                setTemperature(safeNum(t, 1));
+                setHumidity(safeNum(h, 1));
             } catch (e) {
                 setTemperature(null);
                 setHumidity(null);
@@ -95,7 +98,7 @@ export default function HomeContainer() {
             }
         })();
 
-        // 4) Solar: 최신 1건 (preset=1m, maxpoints=1)
+        // 4) Solar: 최신 1건
         (async () => {
             try {
                 setSolarError(null);
@@ -103,7 +106,9 @@ export default function HomeContainer() {
                 const rows = res?.data && Array.isArray(res.data) ? res.data : [];
                 const last = rows.length ? rows[rows.length - 1] : null;
 
-                setSolar(safeNum(last?.irradiance, 0));
+                // ✅ Backend 필드명: irradiance
+                const s = last?.irradiance ?? null;
+                setSolar(safeNum(s, 0));
             } catch (e) {
                 setSolar(null);
                 setSolarError(getErrorMessage(e));
