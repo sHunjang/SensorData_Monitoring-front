@@ -1,57 +1,72 @@
 /**
- * PeriodControls.tsx
+ * 기간 컨트롤 컴포넌트
  *
- * 목적:
- * - 시간 범위 선택(프리셋)과 모드(realtime/range) 선택 UI 제공
- *
- * props:
- * - mode, setMode, preset, setPreset, onQuery, loading
- *
- * 주의:
- * - 프리셋 값은 백엔드와 완전 일치해야 함 (예: '15m','1h','1d','1w','1mo')
+ * Preset 선택 및 커스텀 날짜 범위 설정
  */
+
+import React from 'react';
 import styles from './PeriodControls.module.css';
-export type Preset = '15m' | '1h' | '1d' | '1w' | '1mo';
 
-export default function PeriodControls(props: {
-    mode: 'realtime' | 'range';
-    setMode: (m: 'realtime' | 'range') => void;
-    preset: Preset;
-    setPreset: (p: Preset) => void;
-    onQuery: () => void;
-    loading: boolean;
-}) {
-    const { mode, setMode, preset, setPreset, onQuery, loading } = props;
+interface PeriodControlsProps {
+    /**
+     * 현재 선택된 preset
+     */
+    preset: '1m' | '15m';
+
+    /**
+     * Preset 변경 핸들러
+     */
+    onPresetChange: (preset: '1m' | '15m') => void;
+
+    /**
+     * 시작 날짜 (선택)
+     */
+    startDate?: string;
+
+    /**
+     * 종료 날짜 (선택)
+     */
+    endDate?: string;
+
+    /**
+     * 날짜 변경 핸들러 (선택)
+     */
+    onDateChange?: (start: string, end: string) => void;
+}
+
+export const PeriodControls: React.FC<PeriodControlsProps> = ({
+    preset,
+    onPresetChange,
+    startDate,
+    endDate,
+    onDateChange,
+}) => {
     return (
-        <div className={styles.controls}>
-            <label className={styles.row}>
-                모드
-                <select value={mode} onChange={(e) => setMode(e.target.value as any)} className={styles.input}>
-                    <option value="realtime">실시간</option>
-                    <option value="range">기간</option>
-                </select>
-            </label>
+        <div className={styles.container}>
+            <div className={styles.presetButtons}>
+                <button className={preset === '1m' ? styles.active : ''} onClick={() => onPresetChange('1m')}>
+                    1분
+                </button>
+                <button className={preset === '15m' ? styles.active : ''} onClick={() => onPresetChange('15m')}>
+                    15분
+                </button>
+            </div>
 
-            {mode === 'range' && (
-                <label className={styles.row}>
-                    기간
-                    <select
-                        value={preset}
-                        onChange={(e) => setPreset(e.target.value as Preset)}
-                        className={styles.input}
-                    >
-                        <option value="15m">15분</option>
-                        <option value="1h">1시간</option>
-                        <option value="1d">1일</option>
-                        <option value="1w">1주</option>
-                        <option value="1mo">1개월</option>
-                    </select>
-                </label>
+            {onDateChange && (
+                <div className={styles.dateInputs}>
+                    <input
+                        type="datetime-local"
+                        value={startDate || ''}
+                        onChange={(e) => onDateChange(e.target.value, endDate || '')}
+                    />
+                    <span>~</span>
+                    <input
+                        type="datetime-local"
+                        value={endDate || ''}
+                        onChange={(e) => onDateChange(startDate || '', e.target.value)}
+                    />
+                </div>
             )}
-
-            <button onClick={onQuery} className={styles.button}>
-                {mode === 'realtime' ? '즉시 새로고침' : '기간 조회'}
-            </button>
         </div>
     );
-}
+};

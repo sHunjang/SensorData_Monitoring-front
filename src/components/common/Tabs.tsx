@@ -1,34 +1,47 @@
 /**
- * Tabs.tsx
- *
- * 목적:
- * - 라우팅 탭 네비게이션.
- * - react-router-dom의 NavLink를 사용하여 활성 탭 스타일링.
+ * 탭 컴포넌트
  */
-import { NavLink } from 'react-router-dom';
-export default function Tabs() {
-    const tabs = [
-        { to: '/', label: '홈' },
-        { to: '/modbus', label: '전력' },
-        { to: '/env', label: '온·습도' },
-        { to: '/solar', label: '일사량' },
-    ];
-    return (
-        <nav className="tabs" style={{ display: 'flex', gap: 12 }}>
-            {tabs.map((t) => (
-                <NavLink
-                    key={t.to}
-                    to={t.to}
-                    end
-                    style={({ isActive }) => ({
-                        padding: '6px 10px',
-                        borderRadius: 8,
-                        background: isActive ? '#eef2ff' : 'transparent',
-                    })}
-                >
-                    {t.label}
-                </NavLink>
-            ))}
-        </nav>
-    );
+
+import React from 'react';
+
+interface TabsProps {
+    /**
+     * 탭 목록
+     */
+    tabs: string[];
+
+    /**
+     * 현재 활성 탭 인덱스
+     */
+    activeTab: number;
+
+    /**
+     * 탭 변경 콜백
+     */
+    onTabChange: (index: number) => void;
 }
+
+export const Tabs: React.FC<TabsProps> = ({ tabs, activeTab, onTabChange }) => {
+    return (
+        <div style={{ display: 'flex', borderBottom: '2px solid #ddd' }}>
+            {tabs.map((tab, index) => (
+                <button
+                    key={index}
+                    onClick={() => onTabChange(index)}
+                    style={{
+                        padding: '12px 24px',
+                        backgroundColor: activeTab === index ? '#1976d2' : 'transparent',
+                        color: activeTab === index ? 'white' : '#666',
+                        border: 'none',
+                        borderBottom: activeTab === index ? '2px solid #1976d2' : 'none',
+                        cursor: 'pointer',
+                        fontSize: '16px',
+                        fontWeight: activeTab === index ? 'bold' : 'normal',
+                    }}
+                >
+                    {tab}
+                </button>
+            ))}
+        </div>
+    );
+};

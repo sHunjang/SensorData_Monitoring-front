@@ -1,3 +1,9 @@
+/**
+ * ZoomPanControls.tsx
+ *
+ * 줌/팬 및 시간 범위 컨트롤 컴포넌트
+ */
+
 import React from 'react';
 
 type ZoomPanProps = {
@@ -60,97 +66,101 @@ export default function ZoomPanControls({
             className={className}
             style={{
                 display: 'flex',
-                gap: 12,
-                alignItems: 'center',
+                gap: 8,
                 flexWrap: 'wrap',
+                alignItems: 'center',
+                fontSize: compact ? 11 : 13,
             }}
         >
-            {/* Zoom controls */}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <div style={{ fontSize: compact ? 12 : 13, color: '#94a3b8' }}>{zoomLabel ?? `Zoom ${zoom}`}</div>
-                <button
-                    style={{ ...btnBase, background: canZoomIn ? '#0ecb81' : '#2e3238' }}
-                    onClick={onZoomIn}
-                    disabled={!canZoomIn}
-                    aria-label="Zoom In"
-                >
+            {/* Zoom Controls */}
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <button onClick={onZoomIn} disabled={!canZoomIn} style={{ ...btnBase, opacity: canZoomIn ? 1 : 0.4 }}>
                     ➕
                 </button>
                 <button
-                    style={{ ...btnBase, background: canZoomOut ? '#0ecb81' : '#2e3238' }}
                     onClick={onZoomOut}
                     disabled={!canZoomOut}
-                    aria-label="Zoom Out"
+                    style={{ ...btnBase, opacity: canZoomOut ? 1 : 0.4 }}
                 >
                     ➖
                 </button>
+                {zoomLabel && <span style={{ marginLeft: 4, color: '#94a3b8' }}>{zoomLabel}</span>}
             </div>
 
-            {/* Pan controls */}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button style={btnBase} onClick={onPanLeft} aria-label="Pan Left">
-                    ◀ Prev
-                </button>
-                <button style={btnBase} onClick={onPanRight} aria-label="Pan Right">
-                    Next ▶
-                </button>
-            </div>
+            {/* Pan Controls */}
+            {(onPanLeft || onPanRight) && (
+                <div style={{ display: 'flex', gap: 4 }}>
+                    {onPanLeft && (
+                        <button onClick={onPanLeft} style={btnBase}>
+                            ◀
+                        </button>
+                    )}
+                    {onPanRight && (
+                        <button onClick={onPanRight} style={btnBase}>
+                            ▶
+                        </button>
+                    )}
+                </div>
+            )}
 
-            {/* Range inputs (optional) */}
+            {/* Range Inputs */}
             {setStartAt && setEndAt && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                     <input
                         type="datetime-local"
-                        value={startAt ?? ''}
+                        value={startAt || ''}
                         onChange={(e) => setStartAt(e.target.value || null)}
                         style={{
-                            background: '#2b2f36',
-                            color: '#f7f8fa',
-                            border: '1px solid #2e3238',
-                            padding: '6px 8px',
-                            borderRadius: 6,
+                            ...btnBase,
+                            fontSize: 11,
+                            padding: '4px 6px',
                         }}
-                        aria-label="Start time"
                     />
-                    <span style={{ color: '#94a3b8' }}>~</span>
+                    <span style={{ color: '#64748b' }}>~</span>
                     <input
                         type="datetime-local"
-                        value={endAt ?? ''}
+                        value={endAt || ''}
                         onChange={(e) => setEndAt(e.target.value || null)}
                         style={{
-                            background: '#2b2f36',
-                            color: '#f7f8fa',
-                            border: '1px solid #2e3238',
-                            padding: '6px 8px',
-                            borderRadius: 6,
+                            ...btnBase,
+                            fontSize: 11,
+                            padding: '4px 6px',
                         }}
-                        aria-label="End time"
                     />
+
+                    {/* Quick Range Buttons */}
+                    {setRelativeRange && (
+                        <>
+                            <button onClick={() => setRelativeRange(60)} style={{ ...btnBase, fontSize: 10 }}>
+                                1시간
+                            </button>
+                            <button onClick={() => setRelativeRange(360)} style={{ ...btnBase, fontSize: 10 }}>
+                                6시간
+                            </button>
+                            <button onClick={() => setRelativeRange(1440)} style={{ ...btnBase, fontSize: 10 }}>
+                                1일
+                            </button>
+                        </>
+                    )}
+
+                    {/* Clear Button */}
+                    <button
+                        onClick={() => {
+                            setStartAt(null);
+                            setEndAt(null);
+                        }}
+                        style={{ ...btnBase, fontSize: 10, background: '#374151' }}
+                    >
+                        ✕ 범위 해제
+                    </button>
                 </div>
             )}
 
-            {/* Quick ranges */}
-            {setRelativeRange && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <button style={btnBase} onClick={() => setRelativeRange(60)}>
-                        1h
-                    </button>
-                    <button style={btnBase} onClick={() => setRelativeRange(24 * 60)}>
-                        24h
-                    </button>
-                    <button style={btnBase} onClick={() => setRelativeRange(7 * 24 * 60)}>
-                        7d
-                    </button>
-                </div>
-            )}
-
-            {/* Refresh */}
+            {/* Refresh Button */}
             {onRefresh && (
-                <div style={{ marginLeft: 'auto' }}>
-                    <button style={{ ...btnBase, background: '#0ecb81' }} onClick={onRefresh}>
-                        🔄 Refresh
-                    </button>
-                </div>
+                <button onClick={onRefresh} style={{ ...btnBase, background: '#0ea5e9' }}>
+                    🔄
+                </button>
             )}
         </div>
     );

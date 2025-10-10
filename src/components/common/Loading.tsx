@@ -1,10 +1,9 @@
 /**
- * Loading.tsx
- *
- * 목적:
- * - 로딩 상태 단순 표시.
- * - 필요 시 스켈레톤이나 스피너로 교체.
+ * 로딩 컴포넌트
  */
-export default function Loading() {
-    return <div>로딩중...</div>;
-}
+
+import React from 'react';
+
+export const Loading: React.FC = () => {
+    return <div>로딩 중...</div>;
+};

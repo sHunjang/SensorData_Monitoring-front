@@ -1,31 +1,54 @@
-/* PeriodControls.module.css
-   - 모드/프리셋/버튼 기본 스타일
-*/
-.controls {
+/**
+ * 기간 컨트롤 스타일
+ */
+
+.container {
     display: flex;
-    gap: 12px;
-    align-items: flex-end;
-    flex-wrap: wrap;
-}
-.row {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-.input {
-    padding: 6px 10px;
-    border: 1px solid #ddd;
+    gap: 16px;
+    align-items: center;
+    padding: 16px;
+    background-color: #f5f5f5;
     border-radius: 8px;
 }
-.button {
-    padding: 8px 12px;
-    border: 1px solid #222;
-    border-radius: 10px;
-    background: #111;
-    color: #fff;
-    cursor: pointer;
+
+.presetButtons {
+    display: flex;
+    gap: 8px;
 }
-.button[disabled] {
-    opacity: 0.6;
-    cursor: not-allowed;
+
+.presetButtons button {
+    padding: 8px 16px;
+    border: 1px solid #ddd;
+    background-color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.presetButtons button:hover {
+    background-color: #f0f0f0;
+}
+
+.presetButtons button.active {
+    background-color: #1976d2;
+    color: white;
+    border-color: #1976d2;
+}
+
+.dateInputs {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.dateInputs input {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.dateInputs span {
+    color: #666;
 }

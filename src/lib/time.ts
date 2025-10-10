@@ -1,53 +1,63 @@
 /**
- * src/lib/time.ts
- *
- * 목적:
- * - 서버 응답(rows)을 프론트에서 일관되게 사용할 수 있도록 정규화(normalize)한다.
- * - 반드시 다음을 보장:
- *    1) row.bucket 은 epoch(ms) 숫자 또는 null
- *    2) 주요 수치 필드(예: solar)는 number 또는 null
- *    3) device_id는 number 또는 null
- *
- * 사용:
- *   import { normalizeRows } from "@/lib/time";
- *   const rows = normalizeRows(serverResp.data);
- *
- * 주의:
- * - 서버에서 이미 epoch(ms)를 보내는 경우에도 안전하게 처리.
- * - 문자열 ISO를 Date.parse로 변환. 파싱 불가 시 bucket=null로 둔다.
+ * 시간 관련 유틸리티 함수
  */
 
-export function normalizeRows(rows: any[] = []): any[] {
-  if (!Array.isArray(rows)) return [];
+/**
+ * ISO 8601 문자열을 Date 객체로 변환
+ */
+export function parseISODate(dateString: string): Date {
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) {
+    throw new Error(`Invalid date string: ${dateString}`);
+  }
+  return date;
+}
 
-  return rows.map((r) => {
-    const out: any = { ...r };
+/**
+ * Date 객체를 ISO 8601 문자열로 변환
+ */
+export function formatISODate(date: Date): string {
+  return date.toISOString();
+}
 
-    // bucket 후보: bucket, time_stamp, timestamp
-    const cand = out.bucket ?? out.time_stamp ?? out.timestamp ?? null;
-    let bucketNum: number | null = null;
+/**
+ * 현재 시각 (ISO 8601 문자열)
+ */
+export function getCurrentISODate(): string {
+  return new Date().toISOString();
+}
 
-    if (cand == null) {
-      bucketNum = null;
-    } else if (typeof cand === "number") {
-      bucketNum = Number.isFinite(cand) ? (cand as number) : null;
-    } else if (typeof cand === "string") {
-      const t = Date.parse(cand);
-      bucketNum = Number.isFinite(t) ? t : null;
-    } else if (cand instanceof Date) {
-      bucketNum = cand.getTime();
-    } else {
-      bucketNum = null;
-    }
-    out.bucket = bucketNum;
+/**
+ * N시간 전 (ISO 8601 문자열)
+ */
+export function getHoursAgo(hours: number): string {
+  const date = new Date();
+  date.setHours(date.getHours() - hours);
+  return date.toISOString();
+}
 
-    // 일사량 필드 정규화: solar or solar_irradiance_wm2
-    const s = out.solar ?? out.solar_irradiance_wm2 ?? null;
-    out.solar = s == null ? null : (typeof s === "number" ? s : Number(s));
+/**
+ * N일 전 (ISO 8601 문자열)
+ */
+export function getDaysAgo(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString();
+}
 
-    // device_id 숫자화
-    out.device_id = out.device_id == null ? null : Number(out.device_id);
+/**
+ * 한국 시간대 포맷 (YYYY-MM-DD HH:mm:ss)
+ */
+export function formatKoreanDateTime(date: Date | string): string {
+  const dateObj = typeof date === 'string' ? parseISODate(date) : date;
 
-    return out;
+  return dateObj.toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
   });
 }

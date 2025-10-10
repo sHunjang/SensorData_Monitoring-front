@@ -1,31 +1,42 @@
 /**
- * Error.tsx
- *
- * 목적:
- * - 카드나 패널 내부에서 사용자에게 에러 메시지를 친절하게 보여주기 위해 사용.
- *
- * 동작:
- * - 단순 박스형 경고.
- * - 메시지는 pre-wrap으로 여러 줄 출력 가능.
+ * 에러 컴포넌트
  */
-export default function Error({ msg }: { msg: string }) {
+
+import React from 'react';
+
+interface ErrorProps {
+    /**
+     * 에러 메시지
+     */
+    message: string;
+
+    /**
+     * 재시도 콜백 (선택)
+     */
+    onRetry?: () => void;
+}
+
+export const Error: React.FC<ErrorProps> = ({ message, onRetry }) => {
     return (
-        <div
-            style={{
-                background: '#FEF2F2',
-                border: '1px solid #FCA5A5',
-                color: '#B91C1C',
-                padding: '10px 14px',
-                borderRadius: 8,
-                fontSize: 14,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                whiteSpace: 'pre-wrap',
-            }}
-        >
-            <span style={{ fontWeight: 700 }}>⚠ 에러 발생:</span>
-            <span>{msg}</span>
+        <div style={{ padding: '20px', textAlign: 'center', color: '#d32f2f' }}>
+            <p>⚠️ 오류가 발생했습니다</p>
+            <p>{message}</p>
+            {onRetry && (
+                <button
+                    onClick={onRetry}
+                    style={{
+                        marginTop: '10px',
+                        padding: '8px 16px',
+                        backgroundColor: '#1976d2',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                    }}
+                >
+                    재시도
+                </button>
+            )}
         </div>
     );
-}
+};

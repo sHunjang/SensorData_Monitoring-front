@@ -1,25 +1,40 @@
-/* StatsPanel.module.css
-   - 여러 통계 카드를 그리드로 배치
-*/
-.grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-}
-.item {
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 12px;
-    background: #fafafa;
-}
-.label {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 6px;
-}
-.values {
-    font-size: 14px;
+/**
+ * 통계 패널 스타일
+ */
+
+.container {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 16px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+}
+
+.statItem {
+    flex: 1;
+    min-width: 150px;
+    padding: 12px;
+    background-color: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    text-align: center;
+}
+
+.label {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 8px;
+}
+
+.value {
+    font-size: 20px;
+    font-weight: bold;
+    color: #333;
+}
+
+.unit {
+    font-size: 14px;
+    font-weight: normal;
+    color: #999;
 }

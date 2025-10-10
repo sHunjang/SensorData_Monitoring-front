@@ -1,15 +1,20 @@
 /**
- * Header.tsx
- *
- * 목적:
- * - 앱 상단의 고정 헤더.
- * - 프로젝트명 및 간단한 서브텍스트 표시.
+ * 헤더 컴포넌트
  */
-export default function Header() {
+
+import React from 'react';
+
+interface HeaderProps {
+    /**
+     * 헤더 제목
+     */
+    title: string;
+}
+
+export const Header: React.FC<HeaderProps> = ({ title }) => {
     return (
-        <header style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', background: '#fff' }}>
-            <h1 style={{ margin: 0, fontSize: 18 }}>Sensor Monitoring</h1>
-            <div style={{ opacity: 0.6, fontSize: 12 }}>TAC4300 + Env + Solar</div>
+        <header style={{ padding: '20px', backgroundColor: '#1976d2', color: 'white' }}>
+            <h1 style={{ margin: 0, fontSize: '24px' }}>{title}</h1>
         </header>
     );
-}
+};

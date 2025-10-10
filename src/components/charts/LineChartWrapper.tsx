@@ -1,4 +1,14 @@
-// src/components/charts/LineChartWrapper.tsx
+/**
+ * 라인 차트 래퍼 컴포넌트
+ *
+ * Recharts 기반 시계열 데이터 시각화
+ * - 다양한 시간 단위 지원 (1m, 15m, 1h, 1d, 1w, 1mo, 6mo, 1y)
+ * - 자동 Y축 범위 계산
+ * - CSV 다운로드 기능
+ * - 툴팁 및 범례
+ * - Responsive 디자인
+ */
+
 import React, { useMemo, useCallback } from 'react';
 import {
     ResponsiveContainer,
@@ -11,45 +21,118 @@ import {
     ReferenceLine,
     Legend,
 } from 'recharts';
-import CsvDownloader from '../common/CsvDownloader';
+import { CsvDownloader } from '../common/CsvDownloader';
+import { SERIES_LABELS } from '@/constants/labels';
 
-type Preset = '10s' | '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
+// ========================================
+// 타입 정의
+// ========================================
 
-const PRESET_FORMATTERS: Record<
-    Preset,
-    {
-        format: (ms: number) => string;
-        tooltip: (ms: number) => string;
-        name: string;
-        rotateLabel?: boolean;
-        height?: number;
-    }
-> = {
-    '10s': {
-        // 초 단위: HH:mm:ss
-        format: (ms) =>
-            new Intl.DateTimeFormat('ko-KR', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                timeZone: 'Asia/Seoul',
-            }).format(new Date(ms)),
-        tooltip: (ms) =>
-            new Date(ms).toLocaleString('ko-KR', {
-                timeZone: 'Asia/Seoul',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-            }),
-        name: '10초',
-        rotateLabel: true,
-        height: 60,
-    },
+/**
+ * Preset 타입 (시간 단위)
+ */
+type Preset = '1m' | '15m' | '1h' | '1d' | '1w' | '1mo' | '6mo' | '1y';
+
+/**
+ * Preset별 포맷터 설정
+ */
+interface PresetFormatter {
+    /**
+     * X축 라벨 포맷
+     */
+    format: (ms: number) => string;
+
+    /**
+     * 툴팁 포맷
+     */
+    tooltip: (ms: number) => string;
+
+    /**
+     * Preset 이름
+     */
+    name: string;
+
+    /**
+     * X축 라벨 회전 여부
+     */
+    rotateLabel?: boolean;
+
+    /**
+     * X축 높이
+     */
+    height?: number;
+}
+
+/**
+ * LineChartWrapper Props
+ */
+interface LineChartWrapperProps {
+    /**
+     * 차트 데이터
+     */
+    data: any[];
+
+    /**
+     * 표시할 데이터 키 목록
+     */
+    keys: string[];
+
+    /**
+     * 키별 라벨 (한글명)
+     */
+    labels?: Record<string, string>;
+
+    /**
+     * X축 키 (시간 필드명)
+     */
+    xKey?: string;
+
+    /**
+     * Preset (시간 단위)
+     */
+    preset?: Preset;
+
+    /**
+     * 피크 제한선 (선택)
+     */
+    peakLimit?: number;
+
+    /**
+     * 피크 제한선 라벨 (선택)
+     */
+    peakLimitLabel?: string;
+
+    /**
+     * 데이터 포인트 클릭 핸들러 (선택)
+     */
+    onDataPointClick?: (dataPoint: any, timeMs: number) => void;
+
+    /**
+     * CSV 내보내기 옵션 (선택)
+     */
+    csvExport?: {
+        filename: string;
+        headers: string[];
+    };
+
+    /**
+     * 차트 높이 (기본: 400)
+     */
+    height?: number;
+
+    /**
+     * 라인 색상 배열 (기본값 제공)
+     */
+    colors?: string[];
+}
+
+// ========================================
+// Preset 포맷터 설정
+// ========================================
+
+const PRESET_FORMATTERS: Record<Preset, PresetFormatter> = {
+    // 1분 (초 단위 표시)
     '1m': {
-        // 1분: HH:mm:ss (show seconds)
         format: (ms) =>
             new Intl.DateTimeFormat('ko-KR', {
                 hour: '2-digit',
@@ -71,8 +154,9 @@ const PRESET_FORMATTERS: Record<
         rotateLabel: true,
         height: 60,
     },
+
+    // 15분 (분 단위 표시)
     '15m': {
-        // 15분: HH:mm
         format: (ms) =>
             new Intl.DateTimeFormat('ko-KR', {
                 hour: '2-digit',
@@ -92,12 +176,14 @@ const PRESET_FORMATTERS: Record<
         rotateLabel: true,
         height: 60,
     },
+
+    // 1시간 (시간 단위 표시)
     '1h': {
-        // 1시간 (분 간격): HH:mm
         format: (ms) =>
             new Intl.DateTimeFormat('ko-KR', {
+                month: 'short',
+                day: 'numeric',
                 hour: '2-digit',
-                minute: '2-digit',
                 timeZone: 'Asia/Seoul',
             }).format(new Date(ms)),
         tooltip: (ms) =>
@@ -109,16 +195,17 @@ const PRESET_FORMATTERS: Record<
                 hour: '2-digit',
                 minute: '2-digit',
             }),
-        name: '1시간 (분)',
+        name: '1시간',
         rotateLabel: true,
         height: 60,
     },
+
+    // 1일 (일 단위 표시)
     '1d': {
-        // 1일: MM/dd HH:mm (or MM/dd)
         format: (ms) =>
             new Intl.DateTimeFormat('ko-KR', {
-                month: '2-digit',
-                day: '2-digit',
+                month: 'short',
+                day: 'numeric',
                 timeZone: 'Asia/Seoul',
             }).format(new Date(ms)),
         tooltip: (ms) =>
@@ -130,169 +217,214 @@ const PRESET_FORMATTERS: Record<
             }),
         name: '1일',
         rotateLabel: false,
-        height: 48,
+        height: 40,
     },
+
+    // 1주 (주 단위 표시)
     '1w': {
-        // 1주: MM/dd (weekday)
         format: (ms) =>
             new Intl.DateTimeFormat('ko-KR', {
-                month: '2-digit',
-                day: '2-digit',
-                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
                 timeZone: 'Asia/Seoul',
             }).format(new Date(ms)),
         tooltip: (ms) =>
-            new Date(ms).toLocaleDateString('ko-KR', {
+            new Date(ms).toLocaleString('ko-KR', {
                 timeZone: 'Asia/Seoul',
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
-                weekday: 'long',
             }),
-        name: '1주 (일별)',
+        name: '1주',
         rotateLabel: false,
-        height: 48,
+        height: 40,
     },
+
+    // 1개월 (월/일 표시)
     '1mo': {
-        // 1달: MM/dd
         format: (ms) =>
             new Intl.DateTimeFormat('ko-KR', {
-                month: '2-digit',
-                day: '2-digit',
+                month: 'short',
+                day: 'numeric',
                 timeZone: 'Asia/Seoul',
             }).format(new Date(ms)),
         tooltip: (ms) =>
-            new Date(ms).toLocaleDateString('ko-KR', {
+            new Date(ms).toLocaleString('ko-KR', {
                 timeZone: 'Asia/Seoul',
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
             }),
-        name: '1달 (일별)',
+        name: '1개월',
         rotateLabel: false,
-        height: 48,
+        height: 40,
+    },
+
+    // 6개월 (월 단위 표시)
+    '6mo': {
+        format: (ms) =>
+            new Intl.DateTimeFormat('ko-KR', {
+                year: 'numeric',
+                month: 'short',
+                timeZone: 'Asia/Seoul',
+            }).format(new Date(ms)),
+        tooltip: (ms) =>
+            new Date(ms).toLocaleString('ko-KR', {
+                timeZone: 'Asia/Seoul',
+                year: 'numeric',
+                month: 'long',
+            }),
+        name: '6개월',
+        rotateLabel: false,
+        height: 40,
+    },
+
+    // 1년 (년/월 표시)
+    '1y': {
+        format: (ms) =>
+            new Intl.DateTimeFormat('ko-KR', {
+                year: 'numeric',
+                month: 'short',
+                timeZone: 'Asia/Seoul',
+            }).format(new Date(ms)),
+        tooltip: (ms) =>
+            new Date(ms).toLocaleString('ko-KR', {
+                timeZone: 'Asia/Seoul',
+                year: 'numeric',
+                month: 'long',
+            }),
+        name: '1년',
+        rotateLabel: false,
+        height: 40,
     },
 } as const;
 
-interface LineChartWrapperProps {
-    data: any[];
-    keys: string[];
-    labels: Record<string, string>;
-    xKey?: string;
-    // 기존 zoomLevel 유지 가능. 새로 preset을 주면 preset 우선 사용.
-    zoomLevel?: number;
-    preset?: Preset;
-    peakLimit?: number;
-    peakLimitLabel?: string;
-    onDataPointClick?: (dataPoint: any, timeMs: number) => void;
-    csvExport?: {
-        apiPath: string;
-        extraParams: Record<string, any>;
-        filePrefix: string;
-    };
-    height?: number;
-    colors?: string[];
-}
+// ========================================
+// 컴포넌트
+// ========================================
 
-export default function LineChartWrapper({
+export const LineChartWrapper: React.FC<LineChartWrapperProps> = ({
     data,
     keys,
-    labels,
-    xKey = 'bucket',
-    zoomLevel = 3,
-    preset,
+    labels = SERIES_LABELS,
+    xKey = 'time',
+    preset = '15m',
     peakLimit,
     peakLimitLabel,
     onDataPointClick,
     csvExport,
     height = 400,
-    colors = ['#0ecb81', '#f7931e', '#f6465d', '#26a69a', '#9c27b0'],
-}: LineChartWrapperProps) {
-    // 결정 로직: preset 우선, 없으면 zoomLevel -> preset 매핑
-    const effectivePreset = useMemo<Preset>(() => {
-        if (preset) return preset;
-        // fallback 매핑: zoomLevel 0..6 -> presets
-        switch (zoomLevel) {
-            case 0:
-                return '10s';
-            case 1:
-                return '1m';
-            case 2:
-                return '15m';
-            case 3:
-                return '1h';
-            case 4:
-                return '1d';
-            case 5:
-                return '1w';
-            case 6:
-                return '1mo';
-            default:
-                return '1h';
-        }
-    }, [preset, zoomLevel]);
+    colors = ['#0ecb81', '#f7931e', '#f6465d', '#26a69a', '#9c27b0', '#00bcd4', '#4caf50'],
+}) => {
+    // Formatter 선택
+    const formatter = useMemo(() => PRESET_FORMATTERS[preset], [preset]);
 
-    const formatter = useMemo(() => PRESET_FORMATTERS[effectivePreset], [effectivePreset]);
+    /**
+     * 데이터 전처리: 시간 파싱
+     */
+    const processedData = useMemo(() => {
+        return data.map((d) => {
+            const bucketValue = d[xKey];
+            let timestamp: number;
 
-    // Y축 자동 범위 계산
+            if (typeof bucketValue === 'string') {
+                // ISO 8601 형식 파싱
+                timestamp = new Date(bucketValue).getTime();
+
+                // Invalid Date 체크
+                if (isNaN(timestamp)) {
+                    console.error('Failed to parse date:', bucketValue);
+                    timestamp = Date.now();
+                }
+            } else if (bucketValue instanceof Date) {
+                timestamp = bucketValue.getTime();
+            } else if (typeof bucketValue === 'number') {
+                timestamp = bucketValue;
+            } else {
+                console.warn('Invalid date format:', bucketValue);
+                timestamp = Date.now();
+            }
+
+            return {
+                ...d,
+                [xKey]: timestamp,
+            };
+        });
+    }, [data, xKey]);
+
+    /**
+     * Y축 자동 범위 계산
+     */
     const yAxisDomain = useMemo(() => {
-        if (!data.length || !keys.length) return ['dataMin - 5', 'dataMax + 5'];
-        const allValues = data.flatMap((item) =>
+        if (!processedData.length || !keys.length) {
+            return ['dataMin - 5', 'dataMax + 5'];
+        }
+
+        const allValues = processedData.flatMap((item) =>
             keys.map((key) => Number(item[key])).filter((val) => !isNaN(val) && isFinite(val))
         );
-        if (!allValues.length) return ['dataMin - 5', 'dataMax + 5'];
+
+        if (!allValues.length) {
+            return ['dataMin - 5', 'dataMax + 5'];
+        }
+
         const min = Math.min(...allValues);
         const max = Math.max(...allValues);
         const range = max - min || Math.abs(max) || 1;
         const padding = range * 0.1;
+
         return [Math.max(0, min - padding), max + padding];
-    }, [data, keys]);
+    }, [processedData, keys]);
 
+    /**
+     * X축 간격 계산
+     */
     const xAxisInterval = useMemo(() => {
-        if (data.length <= 10) return 0;
-        if (data.length <= 20) return 1;
-        if (data.length <= 50) return Math.floor(data.length / 10);
-        return Math.floor(data.length / 8);
-    }, [data.length]);
+        if (processedData.length <= 10) return 0;
+        if (processedData.length <= 20) return 1;
+        if (processedData.length <= 50) return Math.floor(processedData.length / 10);
+        return Math.floor(processedData.length / 8);
+    }, [processedData.length]);
 
+    /**
+     * 차트 클릭 핸들러
+     */
     const handleClick = useCallback(
         (chartData: any) => {
             if (onDataPointClick && chartData?.activePayload?.[0]?.payload) {
                 const payload = chartData.activePayload[0].payload;
-                const timeMs = new Date(payload[xKey]).getTime();
+                const timeMs = payload[xKey];
                 onDataPointClick(payload, timeMs);
             }
         },
         [onDataPointClick, xKey]
     );
 
+    /**
+     * 커스텀 툴팁
+     */
     const CustomTooltip = useCallback(
         ({ active, payload, label }: any) => {
             if (!active || !payload?.length) return null;
+
             return (
                 <div
                     style={{
-                        backgroundColor: '#2b2f36',
-                        border: '1px solid #3e4347',
-                        borderRadius: '8px',
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
                         padding: '12px',
-                        color: '#f7f8fa',
-                        fontSize: '12px',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                        borderRadius: '6px',
+                        border: '1px solid #444',
                     }}
                 >
-                    <div style={{ marginBottom: '8px', fontWeight: 600 }}>
-                        {formatter.tooltip(new Date(label).getTime())}
+                    <div style={{ color: '#fff', marginBottom: '8px', fontSize: '12px' }}>
+                        {formatter.tooltip(label)}
                     </div>
                     {payload.map((entry: any, index: number) => (
-                        <div key={index} style={{ color: entry.color, marginBottom: '4px' }}>
-                            <span style={{ marginRight: '8px' }}>●</span>
-                            <span>{labels[entry.dataKey] || entry.dataKey}: </span>
-                            <strong>
-                                {Number(entry.value).toLocaleString('ko-KR', {
-                                    maximumFractionDigits: 2,
-                                })}
-                            </strong>
+                        <div key={index} style={{ color: entry.color, fontSize: '13px', marginBottom: '4px' }}>
+                            {labels[entry.dataKey] || entry.dataKey}:{' '}
+                            {Number(entry.value).toLocaleString('ko-KR', {
+                                maximumFractionDigits: 2,
+                            })}
                         </div>
                     ))}
                 </div>
@@ -304,31 +436,45 @@ export default function LineChartWrapper({
     const axisRotate = formatter.rotateLabel ?? false;
     const axisHeight = formatter.height ?? (axisRotate ? 60 : 40);
 
+    // Dot 표시 설정
+    const showDot = processedData.length <= 50;
+    const dotRadius = processedData.length <= 5 ? 6 : processedData.length <= 20 ? 5 : 4;
+
     return (
-        <div style={{ width: '100%', height }}>
+        <div style={{ width: '100%' }}>
+            {/* CSV 다운로드 및 정보 */}
             {csvExport && (
-                <div
-                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}
-                >
-                    <div style={{ color: '#f7f8fa', fontSize: 14, fontWeight: 600 }}>
-                        📊 {formatter.name} • {data.length}개 데이터
-                    </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <span style={{ color: '#999', fontSize: '14px' }}>
+                        📊 {formatter.name} • {processedData.length}개 데이터
+                    </span>
                     <CsvDownloader
-                        apiPath={csvExport.apiPath}
-                        extraParams={csvExport.extraParams}
-                        filePrefix={csvExport.filePrefix}
+                        data={processedData}
+                        headers={csvExport.headers}
+                        filename={csvExport.filename}
+                        buttonText="CSV 다운로드"
                     />
                 </div>
             )}
 
-            <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data} onClick={handleClick} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#3e4347" horizontal vertical={false} />
+            {/* 차트 */}
+            <ResponsiveContainer width="100%" height={height}>
+                <LineChart
+                    data={processedData}
+                    onClick={handleClick}
+                    margin={{ top: 10, right: 30, left: 0, bottom: axisHeight - 40 }}
+                >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#3e4347" />
 
+                    {/* X축 (시간) */}
                     <XAxis
                         dataKey={xKey}
-                        tickFormatter={(v: any) => {
-                            const ms = new Date(v).getTime();
+                        tickFormatter={(v) => {
+                            const ms = typeof v === 'number' ? v : new Date(v).getTime();
+                            if (isNaN(ms)) {
+                                console.error('Invalid timestamp for XAxis:', v);
+                                return '--';
+                            }
                             return formatter.format(ms);
                         }}
                         tick={{ fontSize: 11, fill: '#b7bcc8' }}
@@ -340,36 +486,45 @@ export default function LineChartWrapper({
                         height={axisHeight}
                     />
 
+                    {/* Y축 */}
                     <YAxis
                         domain={yAxisDomain}
-                        tick={{ fontSize: 11, fill: '#b7bcc8' }}
-                        axisLine={{ stroke: '#3e4347' }}
-                        tickLine={{ stroke: '#3e4347' }}
                         tickFormatter={(value) =>
                             Number(value).toLocaleString('ko-KR', {
                                 maximumFractionDigits: 1,
                             })
                         }
+                        tick={{ fontSize: 11, fill: '#b7bcc8' }}
+                        axisLine={{ stroke: '#3e4347' }}
+                        tickLine={{ stroke: '#3e4347' }}
                     />
 
+                    {/* 툴팁 */}
                     <Tooltip content={<CustomTooltip />} />
 
-                    {keys.length > 1 && <Legend wrapperStyle={{ fontSize: 12, color: '#f7f8fa' }} />}
+                    {/* 범례 (키가 2개 이상일 때만) */}
+                    {keys.length > 1 && (
+                        <Legend
+                            wrapperStyle={{ fontSize: '12px' }}
+                            formatter={(value: string) => labels[value] || value}
+                        />
+                    )}
 
+                    {/* 피크 제한선 */}
                     {peakLimit && (
                         <ReferenceLine
                             y={peakLimit}
                             stroke="#f6465d"
-                            strokeDasharray="8 8"
-                            strokeWidth={2}
+                            strokeDasharray="5 5"
                             label={{
-                                value: peakLimitLabel || `임계값: ${peakLimit}`,
-                                position: 'right',
-                                style: { fill: '#f6465d', fontSize: 11, fontWeight: 600 },
+                                value: peakLimitLabel || `제한: ${peakLimit}`,
+                                fill: '#f6465d',
+                                fontSize: 12,
                             }}
                         />
                     )}
 
+                    {/* 데이터 라인 */}
                     {keys.map((key, index) => (
                         <Line
                             key={key}
@@ -377,23 +532,20 @@ export default function LineChartWrapper({
                             dataKey={key}
                             stroke={colors[index % colors.length]}
                             strokeWidth={2}
-                            dot={{ r: 3, strokeWidth: 0 }}
-                            activeDot={{ r: 5, strokeWidth: 2, stroke: colors[index % colors.length], fill: '#fff' }}
-                            name={labels[key] || key}
-                            connectNulls={false}
+                            dot={showDot ? { r: dotRadius } : false}
+                            activeDot={{ r: 6 }}
+                            connectNulls
                         />
                     ))}
                 </LineChart>
             </ResponsiveContainer>
 
-            <div style={{ marginTop: 12, fontSize: 11, color: '#8c9196', textAlign: 'center' }}>
-                {(['1w', '1mo'] as Preset[]).includes(effectivePreset) && onDataPointClick && (
-                    <span>💡 데이터 포인트를 클릭하면 더 자세한 시간 범위로 드릴다운됩니다</span>
-                )}
-                {(['10s', '1m', '15m', '1h'] as Preset[]).includes(effectivePreset) && (
-                    <span>🔄 실시간으로 데이터가 업데이트됩니다</span>
-                )}
-            </div>
+            {/* 안내 메시지 */}
+            {onDataPointClick && (
+                <div style={{ marginTop: '8px', fontSize: '12px', color: '#999', textAlign: 'center' }}>
+                    💡 데이터 포인트를 클릭하면 상세 정보를 확인할 수 있습니다
+                </div>
+            )}
         </div>
     );
-}
+};

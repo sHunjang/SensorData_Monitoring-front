@@ -4,10 +4,10 @@
  * - 홈, 전력(Modbus), 온·습도(Env), 일사량(Solar)
  */
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
-import HomeContainer from './pages/Home/HomeContainer';
-import ModbusContainer from './pages/Modbus/ModbusContainer';
-import EnvContainer from './pages/Env/EnvContainer';
-import SolarContainer from './pages/Solar/SolarContainer';
+import { HomeContainer } from './pages/Home/HomeContainer';
+import { ModbusContainer } from './pages/Modbus/ModbusContainer';
+import { EnvContainer } from './pages/Env/EnvContainer';
+import { SolarContainer } from './pages/Solar/SolarContainer';
 
 export default function App() {
     const Tab = ({ to, label }: { to: string; label: string }) => (

@@ -1,5 +1,5 @@
 import React from 'react';
-import LineChartWrapper from '@/components/charts/LineChartWrapper';
+import { LineChartWrapper } from '@/components/charts/LineChartWrapper';
 import ZoomPanControls from '@/components/ui/ZoomPanControls';
 import styles from './Solar.module.css';
 
@@ -9,23 +9,31 @@ type Props = {
     deviceId: number;
     setDeviceId: (id: number) => void;
     deviceOptions: number[];
+
+    // ✅ Zoom 관련
     zoomLevel: number;
+    setZoomLevel?: (z: number) => void;
     zoomLabel: string;
-    preset?: '1h' | '1d' | '1w' | '1mo';
+    preset?: '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
     onZoomIn: () => void;
     onZoomOut: () => void;
     canZoomIn: boolean;
     canZoomOut: boolean;
     onDataPointClick?: (d: any, t: number) => void;
     onManualRefresh: () => void;
+
+    // ✅ 데이터
     data: any[];
     stats: Stat;
     loading: boolean;
     error: string | null;
     logs: string[];
+
+    // ✅ Peak Limits
     peakLimits?: Record<string, number>;
     setPeakLimits?: (p: Record<string, number>) => void;
 
+    // ✅ 시간 범위
     startAt?: string | null;
     endAt?: string | null;
     setStartAt?: (v: string | null) => void;
@@ -33,6 +41,7 @@ type Props = {
     setRelativeRange?: (minutes: number) => void;
     isRangeMode?: boolean;
 
+    // ✅ Pan 컨트롤
     panLeft?: () => void;
     panRight?: () => void;
 };
@@ -109,7 +118,7 @@ export default function SolarPresenter({
                 <div className={styles.controls}>
                     <div style={{ maxWidth: '100%' }}>
                         <ZoomPanControls
-                            zoom={zoomLevel}
+                            zoom={zoomLevel} // ✅ 정확한 prop 이름
                             zoomLabel={zoomLabel}
                             onZoomIn={onZoomIn}
                             onZoomOut={onZoomOut}
@@ -181,21 +190,10 @@ export default function SolarPresenter({
                         keys={['irradiance']}
                         labels={{ irradiance: 'Irradiance (W/m²)' }}
                         xKey="bucket"
-                        zoomLevel={zoomLevel}
-                        preset={preset}
+                        preset={preset} // ✅ preset만 전달
                         peakLimit={currentPeakLimit ?? undefined}
                         peakLimitLabel={currentPeakLimit ? `임계값: ${currentPeakLimit} W/m²` : undefined}
                         onDataPointClick={onDataPointClick}
-                        csvExport={{
-                            apiPath: '/data/solar/query',
-                            extraParams: {
-                                deviceId,
-                                preset,
-                                start: startAt ? new Date(startAt).toISOString() : undefined,
-                                end: endAt ? new Date(endAt).toISOString() : undefined,
-                            },
-                            filePrefix: `solar-${deviceId}-${zoomLabel}`,
-                        }}
                         height={420}
                     />
                 </div>

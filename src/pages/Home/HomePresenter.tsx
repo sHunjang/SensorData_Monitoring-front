@@ -7,7 +7,7 @@
 
 import React from 'react';
 import styles from './HomePresenter.module.css';
-import Error from '@/components/common/Error'; // 프로젝트의 공용 Error 컴포넌트 사용
+import { Error } from '@/components/common/Error'; // 프로젝트의 공용 Error 컴포넌트 사용
 
 type Props = {
     power: number | null; // kW

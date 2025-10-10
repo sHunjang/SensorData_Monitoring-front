@@ -1,30 +1,67 @@
-/* LogPanel.module.css
-   - 자동 스크롤용 div 높이 고정
-   - monospace 폰트로 로그 표시
-*/
-.wrap {
+/**
+ * 로그 패널 스타일
+ */
+
+.container {
+    padding: 16px;
+    background-color: #f5f5f5;
+    border-radius: 8px;
+}
+
+.container h3 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    color: #333;
+}
+
+.logList {
+    max-height: 300px;
+    overflow-y: auto;
+    background-color: white;
     border: 1px solid #ddd;
-    border-radius: 12px;
-    overflow: hidden;
-}
-.header {
-    padding: 8px 12px;
-    background: #fafafa;
-    border-bottom: 1px solid #eee;
-    font-weight: 600;
-}
-.body {
-    height: 160px;
-    overflow: auto;
-    font-family: ui-monospace, Menlo, Consolas, monospace;
-    font-size: 12px;
-    padding: 8px 12px;
-    white-space: pre-wrap;
-}
-.empty {
-    color: #999;
+    border-radius: 4px;
     padding: 8px;
 }
-.line {
-    padding: 2px 0;
+
+.empty {
+    text-align: center;
+    color: #999;
+    padding: 20px;
+}
+
+.logItem {
+    padding: 8px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    gap: 8px;
+}
+
+.logItem.info {
+    background-color: #e3f2fd;
+}
+
+.logItem.warning {
+    background-color: #fff3e0;
+}
+
+.logItem.error {
+    background-color: #ffebee;
+}
+
+.timestamp {
+    color: #666;
+    font-weight: bold;
+}
+
+.level {
+    color: #1976d2;
+    font-weight: bold;
+}
+
+.message {
+    flex: 1;
+    color: #333;
 }

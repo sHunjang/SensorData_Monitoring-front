@@ -1,93 +1,55 @@
 /**
- * SummaryBar.tsx
+ * 요약 바 컴포넌트
  *
- * 목적:
- * - 대시보드 상단의 요약 카드 컴포넌트.
- * - 실시간/구간 평균을 모두 지원.
- *
- * props:
- * - title, unit, mode (realtime|range), realtimeValue, stats, seriesData(스파크라인)
+ * 주요 지표를 요약해서 표시하는 바
  */
+
+import React from 'react';
 import styles from './SummaryBar.module.css';
-import { ResponsiveContainer, LineChart, Line } from 'recharts';
 
-export type Stat = { avg: number | null; max: number | null; min: number | null; count: number };
-
-function fmt(n: number | null | undefined, d = 3) {
-    if (n == null || Number.isNaN(n)) return '—';
-    const abs = Math.abs(n);
-    const digits = abs >= 100 ? 1 : abs >= 10 ? 2 : d;
-    return Number(n).toFixed(digits);
+interface SummaryBarProps {
+    /**
+     * 요약 항목 목록
+     */
+    items: {
+        label: string;
+        value: string | number;
+        unit?: string;
+        trend?: 'up' | 'down' | 'neutral';
+    }[];
 }
 
-type CardProps = {
-    title: string;
-    unit?: string;
-    mode: 'realtime' | 'range';
-    realtimeValue?: number | null;
-    stats?: Stat;
-    windowText?: string;
-    seriesData?: Array<{ x: string; y: number | null }>;
-    higherIsBetter?: boolean;
-};
+export const SummaryBar: React.FC<SummaryBarProps> = ({ items }) => {
+    const getTrendIcon = (trend?: 'up' | 'down' | 'neutral') => {
+        if (trend === 'up') return '▲';
+        if (trend === 'down') return '▼';
+        return '−';
+    };
 
-export default function SummaryBar({
-    title,
-    unit,
-    mode,
-    realtimeValue,
-    stats,
-    windowText,
-    seriesData,
-    higherIsBetter = true,
-}: CardProps) {
-    const value = mode === 'realtime' ? realtimeValue : stats?.avg ?? null;
-
-    let trendClass = styles.neutral;
-    if (seriesData && seriesData.length >= 2) {
-        const nums = seriesData.map((d) => d.y).filter((v): v is number => v != null);
-        if (nums.length >= 2) {
-            const diff = nums[nums.length - 1] - nums[0];
-            const good = higherIsBetter ? diff > 0 : diff < 0;
-            const bad = higherIsBetter ? diff < 0 : diff > 0;
-            trendClass = good ? styles.good : bad ? styles.bad : styles.neutral;
-        }
-    }
+    const getTrendColor = (trend?: 'up' | 'down' | 'neutral') => {
+        if (trend === 'up') return '#4caf50';
+        if (trend === 'down') return '#f44336';
+        return '#999';
+    };
 
     return (
-        <div className={styles.card}>
-            {seriesData && seriesData.length > 1 && (
-                <div className={styles.spark}>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={seriesData}>
-                            <Line type="monotone" dataKey="y" dot={false} strokeWidth={2} isAnimationActive={false} />
-                        </LineChart>
-                    </ResponsiveContainer>
-                </div>
-            )}
-
-            <div className={styles.body}>
-                <div className={styles.title}>
-                    <span>{title}</span>
-                    {unit ? <span className={styles.badge}>{unit}</span> : null}
-                </div>
-
-                <div className={`${styles.value} ${trendClass}`.trim()}>
-                    {fmt(value)}
-                    {unit ? <span className={styles.unit}>{unit}</span> : null}
-                </div>
-
-                {mode === 'range' && stats && (
-                    <div className={styles.rows}>
-                        <div className={styles.kv}>평균 {fmt(stats.avg)}</div>
-                        <div className={styles.kv}>최고 {fmt(stats.max)}</div>
-                        <div className={styles.kv}>최저 {fmt(stats.min)}</div>
-                        <div className={styles.kv}>개수 {stats.count ?? 0}</div>
+        <div className={styles.container}>
+            {items.map((item, index) => (
+                <div key={index} className={styles.item}>
+                    <div className={styles.label}>{item.label}</div>
+                    <div className={styles.valueWrapper}>
+                        <span className={styles.value}>
+                            {typeof item.value === 'number' ? item.value.toFixed(2) : item.value}
+                        </span>
+                        {item.unit && <span className={styles.unit}>{item.unit}</span>}
+                        {item.trend && (
+                            <span className={styles.trend} style={{ color: getTrendColor(item.trend) }}>
+                                {getTrendIcon(item.trend)}
+                            </span>
+                        )}
                     </div>
-                )}
-            </div>
-
-            {mode === 'range' && windowText && <div className={styles.footer}>{windowText}</div>}
+                </div>
+            ))}
         </div>
     );
-}
+};

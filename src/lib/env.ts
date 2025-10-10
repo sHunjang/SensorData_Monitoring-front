@@ -1,3 +1,18 @@
-export const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
-export const PRESETS = ["15m", "1h", "6h", "12h", "1d", "3d", "7d", "30d"] as const;
-export type Preset = (typeof PRESETS)[number];
+/**
+ * 환경 변수 헬퍼
+ */
+
+/**
+ * API 베이스 URL
+ */
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
+/**
+ * 개발 모드 여부
+ */
+export const IS_DEV = import.meta.env.DEV;
+
+/**
+ * 프로덕션 모드 여부
+ */
+export const IS_PROD = import.meta.env.PROD;
