@@ -67,62 +67,19 @@ interface PresetFormatter {
  * LineChartWrapper Props
  */
 interface LineChartWrapperProps {
-    /**
-     * 차트 데이터
-     */
     data: any[];
-
-    /**
-     * 표시할 데이터 키 목록
-     */
     keys: string[];
-
-    /**
-     * 키별 라벨 (한글명)
-     */
     labels?: Record<string, string>;
-
-    /**
-     * X축 키 (시간 필드명)
-     */
     xKey?: string;
-
-    /**
-     * Preset (시간 단위)
-     */
-    preset?: Preset;
-
-    /**
-     * 피크 제한선 (선택)
-     */
+    preset?: Preset; // ✅ 'Preset' 타입
     peakLimit?: number;
-
-    /**
-     * 피크 제한선 라벨 (선택)
-     */
     peakLimitLabel?: string;
-
-    /**
-     * 데이터 포인트 클릭 핸들러 (선택)
-     */
     onDataPointClick?: (dataPoint: any, timeMs: number) => void;
-
-    /**
-     * CSV 내보내기 옵션 (선택)
-     */
     csvExport?: {
-        filename: string;
-        headers: string[];
+        filename: string; // ✅ 필수
+        headers: string[]; // ✅ 필수
     };
-
-    /**
-     * 차트 높이 (기본: 400)
-     */
     height?: number;
-
-    /**
-     * 라인 색상 배열 (기본값 제공)
-     */
     colors?: string[];
 }
 

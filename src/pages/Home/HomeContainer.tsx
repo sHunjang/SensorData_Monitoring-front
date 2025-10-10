@@ -2,13 +2,10 @@
  * HomeContainer.tsx
  * - 목적: Presenter 에 전달할 요약 값들을 폴링해서 수집.
  * - 설계:
- *   1) Modbus: 1h preset의 마지막 포인트로 현재 전력, 1d preset으로 오늘 누적 계산
- *   2) Env/Solar: 최신 1포인트(preset=15m) 조회
- *   3) 각 호출은 실패 시 에러 상태를 설정하고 Presenter에게 전달
- *
- * 주의:
- * - API 함수(fetchModbusQuery, fetchEnvQuery, fetchSolarQuery) 시그니처는 프로젝트 기준으로 사용.
- * - getErrorMessage는 공용 에러 문자열 추출 유틸입니다.
+ *   1) Modbus: 1m preset 최근 60개 포인트에서 마지막을 현재 전력으로 사용
+ *   2) Modbus: 1m preset 최근 1440개 포인트(1일)에서 에너지 차이로 당일 누적 계산
+ *   3) Env/Solar: 최신 1포인트(preset=1m) 조회
+ *   4) 각 호출은 실패 시 에러 상태를 설정하고 Presenter에게 전달
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -17,7 +14,6 @@ import { fetchModbusQuery } from '@/api/modbus';
 import { fetchEnvQuery } from '@/api/env';
 import { fetchSolarQuery } from '@/api/solar';
 import { getErrorMessage } from '@/lib/http';
-import { normalizeRows } from '@/lib/time'; // 만약 없으면 안전하게 제거 가능
 
 const MODBUS_ID = 11;
 const ENV_ID = 21;
@@ -47,23 +43,17 @@ export default function HomeContainer() {
 
     // 폴링 함수 (한 번에 모든 항목 조회)
     const poll = useCallback(async () => {
-        // 1) Modbus: 최근 1시간 데이터에서 마지막 포인트를 현재 전력으로 사용
+        // 1) Modbus: 최근 1분 데이터에서 마지막 포인트를 현재 전력으로 사용
         (async () => {
             try {
                 setPowerError(null);
-                const res = await fetchModbusQuery({ deviceid: MODBUS_ID, preset: '10s', maxpoints: 60 });
+                const res = await fetchModbusQuery({ deviceid: MODBUS_ID, preset: '1m', maxpoints: 60 });
                 const rows = res?.data && Array.isArray(res.data) ? res.data : [];
                 const last = rows.length ? rows[rows.length - 1] : null;
-                // 여러 필드 후보에서 안전하게 찾기
-                const candidates = ['totalactivepowerkw', 'p_kw', 'power', 'total_active_power_kw'];
-                let v: any = null;
-                for (const k of candidates) {
-                    if (last && k in last) {
-                        v = last[k];
-                        break;
-                    }
-                }
-                setPower(safeNum(v, 2));
+
+                // power 필드 찾기
+                const powerValue = last?.power ?? null;
+                setPower(safeNum(powerValue, 2));
             } catch (e) {
                 setPower(null);
                 setPowerError(getErrorMessage(e));
@@ -74,10 +64,10 @@ export default function HomeContainer() {
         (async () => {
             try {
                 setTodayError(null);
-                const res = await fetchModbusQuery({ deviceid: MODBUS_ID, preset: '10s', maxpoints: 1440 });
+                const res = await fetchModbusQuery({ deviceid: MODBUS_ID, preset: '1m', maxpoints: 1440 });
                 const rows = res?.data && Array.isArray(res.data) ? res.data : [];
                 const nums = rows
-                    .map((r: any) => r?.totalactiveenergykwh ?? r?.e_kwh ?? r?.energy ?? null)
+                    .map((r: any) => r?.energy ?? null)
                     .map((x: any) => Number(x))
                     .filter((n: number) => Number.isFinite(n));
                 const kwh = nums.length ? Number((Math.max(...nums) - Math.min(...nums)).toFixed(2)) : null;
@@ -88,18 +78,16 @@ export default function HomeContainer() {
             }
         })();
 
-        // 3) Env: 최신 1건 (preset=15m, maxpoints=1)
+        // 3) Env: 최신 1건 (preset=1m, maxpoints=1)
         (async () => {
             try {
                 setEnvError(null);
-                const res = await fetchEnvQuery({ deviceid: ENV_ID, preset: '10s', maxpoints: 1 });
+                const res = await fetchEnvQuery({ deviceid: ENV_ID, preset: '1m', maxpoints: 1 });
                 const rows = res?.data && Array.isArray(res.data) ? res.data : [];
-                const rowsNorm = typeof normalizeRows === 'function' ? normalizeRows(rows) : rows;
-                const last = rowsNorm.length ? rowsNorm[rowsNorm.length - 1] : null;
-                const t = last?.temperature ?? last?.temperature_c ?? last?.temp ?? null;
-                const h = last?.humidity ?? last?.humidity_rh ?? last?.hum ?? null;
-                setTemperature(safeNum(t, 1));
-                setHumidity(safeNum(h, 1));
+                const last = rows.length ? rows[rows.length - 1] : null;
+
+                setTemperature(safeNum(last?.temperature, 1));
+                setHumidity(safeNum(last?.humidity, 1));
             } catch (e) {
                 setTemperature(null);
                 setHumidity(null);
@@ -107,16 +95,15 @@ export default function HomeContainer() {
             }
         })();
 
-        // 4) Solar: 최신 1건 (preset=15m, maxpoints=1)
+        // 4) Solar: 최신 1건 (preset=1m, maxpoints=1)
         (async () => {
             try {
                 setSolarError(null);
-                const res = await fetchSolarQuery({ deviceid: SOLAR_ID, preset: '10s', maxpoints: 1 });
+                const res = await fetchSolarQuery({ deviceid: SOLAR_ID, preset: '1m', maxpoints: 1 });
                 const rows = res?.data && Array.isArray(res.data) ? res.data : [];
-                const rowsNorm = typeof normalizeRows === 'function' ? normalizeRows(rows) : rows;
-                const last = rowsNorm.length ? rowsNorm[rowsNorm.length - 1] : null;
-                const s = last?.irradiance ?? last?.solar ?? last?.solar_irradiance_wm2 ?? null;
-                setSolar(safeNum(s, 0));
+                const last = rows.length ? rows[rows.length - 1] : null;
+
+                setSolar(safeNum(last?.irradiance, 0));
             } catch (e) {
                 setSolar(null);
                 setSolarError(getErrorMessage(e));

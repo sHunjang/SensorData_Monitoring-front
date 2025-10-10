@@ -87,7 +87,7 @@ export interface ModbusRealtimeResponse {
  */
 export interface ModbusQueryParams {
     deviceid: number;
-    preset: '1m' | '15m';
+    preset: '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
     maxpoints?: number;
     start?: string;
     end?: string;
@@ -100,7 +100,7 @@ export interface ModbusQueryParams {
 /**
  * Modbus 히스토리 데이터 조회
  */
-export async function fetchModbusData(params: ModbusQueryParams): Promise<ModbusResponse> {
+export async function fetchModbusQuery(params: ModbusQueryParams): Promise<ModbusResponse> {
     const queryParams = new URLSearchParams();
     queryParams.append('deviceid', params.deviceid.toString());
     queryParams.append('preset', params.preset);
@@ -118,7 +118,7 @@ export async function fetchModbusData(params: ModbusQueryParams): Promise<Modbus
     }
 
     // ✅ 백엔드 응답 받기
-    const response = await httpGet<any>(`/data/modbus/query?${queryParams.toString()}`);
+    const response = await httpGet(`/data/modbus/query?${queryParams.toString()}`);
 
     // ✅ 백엔드 응답을 프론트엔드 형식으로 변환
     const data: ModbusDataPoint[] = (response.data || []).map((row: any) => ({
@@ -171,7 +171,7 @@ export async function fetchModbusData(params: ModbusQueryParams): Promise<Modbus
  */
 export async function fetchModbusRealtime(deviceId: number): Promise<ModbusRealtimeResponse> {
     // ✅ 백엔드 엔드포인트: /data/modbus/realtime/{device_id}
-    const response = await httpGet<any>(`/data/modbus/realtime/${deviceId}`);
+    const response = await httpGet(`/data/modbus/realtime/${deviceId}`);
 
     // ✅ 백엔드 응답 변환
     return {

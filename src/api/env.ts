@@ -66,11 +66,11 @@ export interface EnvRealtimeResponse {
  * 환경센서 쿼리 파라미터
  */
 export interface EnvQueryParams {
-    deviceid: number; // 21-23
-    preset: '1m' | '15m'; // 집계 단위
-    maxpoints?: number; // 최대 포인트 수 (기본: 1000)
-    start?: string; // 시작 시각 (ISO 8601)
-    end?: string; // 종료 시각 (ISO 8601)
+    deviceid: number;
+    preset: '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
+    maxpoints?: number;
+    start?: string;
+    end?: string;
 }
 
 // ========================================
@@ -78,12 +78,13 @@ export interface EnvQueryParams {
 // ========================================
 
 /**
- * 환경센서 히스토리 데이터 조회
+ * 환경센서 데이터 조회 (집계된 데이터)
  * 
- * @param params 쿼리 파라미터
- * @returns 환경센서 데이터 응답
+ * @param params - 쿼리 파라미터
+ * @returns 환경센서 응답 데이터
  */
-export async function fetchEnvData(params: EnvQueryParams): Promise<EnvResponse> {
+export async function fetchEnvQuery(params: EnvQueryParams): Promise<EnvResponse> {
+    // ✅ Query String 수동 생성
     const queryParams = new URLSearchParams();
     queryParams.append('deviceid', params.deviceid.toString());
     queryParams.append('preset', params.preset);
@@ -100,61 +101,57 @@ export async function fetchEnvData(params: EnvQueryParams): Promise<EnvResponse>
         queryParams.append('end', params.end);
     }
 
-    // ✅ 백엔드 응답 받기
+    // ✅ URL에 쿼리 스트링 직접 추가
     const response = await httpGet<any>(`/data/env/query?${queryParams.toString()}`);
 
-    // ✅ 백엔드 응답을 프론트엔드 형식으로 변환
-    const data: EnvDataPoint[] = (response.data || []).map((row: any) => ({
-        time: row.timestamp, // timestamp → time
-        temperature: row.avg_temperature_c ?? null,
-        humidity: row.avg_humidity_percent ?? null,
+    // 백엔드 응답 변환
+    const data = (response.data || []).map((item: any) => ({
+        time: item.timestamp,
+        temperature: item.avg_temperature_c ?? null,
+        humidity: item.avg_humidity_percent ?? null,
     }));
 
-    // ✅ 통계 계산
-    const temps = data.map(d => d.temperature).filter((v): v is number => v !== null);
-    const humids = data.map(d => d.humidity).filter((v): v is number => v !== null);
+    // 통계 계산
+    const temps = data.map((d: any) => d.temperature).filter((v: any) => v != null);
+    const humids = data.map((d: any) => d.humidity).filter((v: any) => v != null);
 
     const stats: EnvStats = {
         temperature: {
-            avg: temps.length > 0 ? temps.reduce((a, b) => a + b, 0) / temps.length : 0,
-            max: temps.length > 0 ? Math.max(...temps) : 0,
-            min: temps.length > 0 ? Math.min(...temps) : 0,
+            avg: temps.length ? temps.reduce((a: number, b: number) => a + b, 0) / temps.length : 0,
+            max: temps.length ? Math.max(...temps) : 0,
+            min: temps.length ? Math.min(...temps) : 0,
         },
         humidity: {
-            avg: humids.length > 0 ? humids.reduce((a, b) => a + b, 0) / humids.length : 0,
-            max: humids.length > 0 ? Math.max(...humids) : 0,
-            min: humids.length > 0 ? Math.min(...humids) : 0,
+            avg: humids.length ? humids.reduce((a: number, b: number) => a + b, 0) / humids.length : 0,
+            max: humids.length ? Math.max(...humids) : 0,
+            min: humids.length ? Math.min(...humids) : 0,
         },
     };
 
     return {
-        window: {
-            start: response.time_range?.start || '',
-            end: response.time_range?.end || '',
-        },
-        bucket: response.preset || params.preset,
+        window: response.window || { start: '', end: '' },
+        bucket: response.bucket || params.preset,
         series: ['temperature', 'humidity'],
         data,
         stats,
-        count: response.count || data.length,
+        count: data.length,
+        message: response.message,
     };
 }
 
 /**
  * 환경센서 실시간 데이터 조회
  * 
- * @param deviceId 디바이스 ID (21-23)
- * @returns 실시간 데이터
+ * @param params - device_id
+ * @returns 실시간 환경센서 데이터
  */
-export async function fetchEnvRealtime(deviceId: number): Promise<EnvRealtimeResponse> {
-    // ✅ 백엔드 엔드포인트: /data/env/realtime/{device_id}
-    const response = await httpGet<any>(`/data/env/realtime/${deviceId}`);
+export async function fetchEnvRealtime(params: { deviceid: number }): Promise<EnvRealtimeResponse> {
+    const response = await httpGet<any>(`/data/env/realtime/${params.deviceid}`);
 
-    // ✅ 백엔드 응답 변환
     return {
-        device_id: response.device_id,
-        timestamp: response.data?.timestamp || '',
-        temperature: response.data?.avg_temperature_c ?? null,
-        humidity: response.data?.avg_humidity_percent ?? null,
+        device_id: response.data.device_id,
+        timestamp: response.data.timestamp,
+        temperature: response.data.avg_temperature_c ?? null,
+        humidity: response.data.avg_humidity_percent ?? null,
     };
 }

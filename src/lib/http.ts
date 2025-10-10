@@ -210,6 +210,56 @@ export async function httpDelete<T = any>(
 }
 
 // ========================================
+// 에러 처리 유틸
+// ========================================
+
+/**
+ * 에러 메시지 추출
+ * 
+ * Axios 에러에서 사용자에게 보여줄 문자열 반환
+ * 
+ * @param error - 에러 객체
+ * @returns 사용자 친화적인 에러 메시지
+ * 
+ * @example
+ * try {
+ *   await httpGet('/api/users');
+ * } catch (error) {
+ *   const message = getErrorMessage(error);
+ *   console.error(message);
+ * }
+ */
+export function getErrorMessage(error: unknown): string {
+    if (axios.isAxiosError(error)) {
+        // 1) 백엔드가 보낸 에러 메시지
+        if (error.response?.data?.message) {
+            return error.response.data.message;
+        }
+        if (error.response?.data?.detail) {
+            return error.response.data.detail;
+        }
+
+        // 2) HTTP 상태 코드 메시지
+        if (error.response?.status) {
+            return `HTTP ${error.response.status}: ${error.response.statusText || '오류'}`;
+        }
+
+        // 3) 네트워크 에러
+        if (error.message) {
+            return error.message;
+        }
+    }
+
+    // 4) 일반 Error 객체
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    // 5) 알 수 없는 에러
+    return '알 수 없는 오류가 발생했습니다.';
+}
+
+// ========================================
 // Axios 인스턴스 직접 export
 // ========================================
 /**

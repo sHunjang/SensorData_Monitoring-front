@@ -58,7 +58,8 @@ export interface SolarRealtimeResponse {
  * 일사량 쿼리 파라미터
  */
 export interface SolarQueryParams {
-    preset: '1m' | '15m';
+    deviceid: number;
+    preset: '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
     maxpoints?: number;
     start?: string;
     end?: string;
@@ -71,8 +72,9 @@ export interface SolarQueryParams {
 /**
  * 일사량 히스토리 데이터 조회
  */
-export async function fetchSolarData(params: SolarQueryParams): Promise<SolarResponse> {
+export async function fetchSolarQuery(params: SolarQueryParams): Promise<SolarResponse> {
     const queryParams = new URLSearchParams();
+    queryParams.append('deviceid', params.deviceid.toString());
     queryParams.append('preset', params.preset);
 
     if (params.maxpoints) {
@@ -87,8 +89,8 @@ export async function fetchSolarData(params: SolarQueryParams): Promise<SolarRes
         queryParams.append('end', params.end);
     }
 
-    // ✅ 백엔드 응답 받기 (deviceid 제거!)
-    const response = await httpGet<any>(`/data/solar/query?${queryParams.toString()}`);
+    // ✅ 백엔드 응답 받기
+    const response = await httpGet(`/data/solar/query?${queryParams.toString()}`);
 
     // ✅ 백엔드 응답을 프론트엔드 형식으로 변환
     const data: SolarDataPoint[] = (response.data || []).map((row: any) => ({
@@ -123,9 +125,9 @@ export async function fetchSolarData(params: SolarQueryParams): Promise<SolarRes
 /**
  * 일사량 실시간 데이터 조회
  */
-export async function fetchSolarRealtime(): Promise<SolarRealtimeResponse> {
-    // ✅ 백엔드 엔드포인트: /data/solar/realtime (deviceid 제거!)
-    const response = await httpGet<any>('/data/solar/realtime');
+export async function fetchSolarRealtime(deviceId: number): Promise<SolarRealtimeResponse> {
+    // ✅ 백엔드 엔드포인트: /data/solar/realtime/{device_id}
+    const response = await httpGet(`/data/solar/realtime/${deviceId}`);
 
     // ✅ 백엔드 응답 변환
     return {

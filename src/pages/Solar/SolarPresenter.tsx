@@ -9,31 +9,23 @@ type Props = {
     deviceId: number;
     setDeviceId: (id: number) => void;
     deviceOptions: number[];
-
-    // ✅ Zoom 관련
     zoomLevel: number;
-    setZoomLevel?: (z: number) => void;
     zoomLabel: string;
-    preset?: '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
+    preset?: '1m' | '15m' | '1h' | '1d' | '1w' | '1mo' | '6mo' | '1y';
     onZoomIn: () => void;
     onZoomOut: () => void;
     canZoomIn: boolean;
     canZoomOut: boolean;
     onDataPointClick?: (d: any, t: number) => void;
     onManualRefresh: () => void;
-
-    // ✅ 데이터
     data: any[];
     stats: Stat;
     loading: boolean;
     error: string | null;
     logs: string[];
-
-    // ✅ Peak Limits
     peakLimits?: Record<string, number>;
     setPeakLimits?: (p: Record<string, number>) => void;
 
-    // ✅ 시간 범위
     startAt?: string | null;
     endAt?: string | null;
     setStartAt?: (v: string | null) => void;
@@ -41,7 +33,6 @@ type Props = {
     setRelativeRange?: (minutes: number) => void;
     isRangeMode?: boolean;
 
-    // ✅ Pan 컨트롤
     panLeft?: () => void;
     panRight?: () => void;
 };
@@ -118,7 +109,7 @@ export default function SolarPresenter({
                 <div className={styles.controls}>
                     <div style={{ maxWidth: '100%' }}>
                         <ZoomPanControls
-                            zoom={zoomLevel} // ✅ 정확한 prop 이름
+                            zoom={zoomLevel}
                             zoomLabel={zoomLabel}
                             onZoomIn={onZoomIn}
                             onZoomOut={onZoomOut}
@@ -190,10 +181,14 @@ export default function SolarPresenter({
                         keys={['irradiance']}
                         labels={{ irradiance: 'Irradiance (W/m²)' }}
                         xKey="bucket"
-                        preset={preset} // ✅ preset만 전달
+                        preset={preset}
                         peakLimit={currentPeakLimit ?? undefined}
                         peakLimitLabel={currentPeakLimit ? `임계값: ${currentPeakLimit} W/m²` : undefined}
                         onDataPointClick={onDataPointClick}
+                        csvExport={{
+                            filename: `solar-${deviceId}-${zoomLabel}.csv`,
+                            headers: ['bucket', 'irradiance'],
+                        }}
                         height={420}
                     />
                 </div>
