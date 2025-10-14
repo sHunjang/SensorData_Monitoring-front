@@ -1,0 +1,83 @@
+/* SummaryBar.module.css
+   - 요약 카드 스타일, 작은 스파크라인 포함 가능
+*/
+.wrap {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+.card {
+    position: relative;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: #fff;
+    overflow: hidden;
+}
+.body {
+    padding: 12px 14px 8px 14px;
+}
+.title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #6b7280;
+}
+.badge {
+    border: 1px solid #e5e7eb;
+    border-radius: 999px;
+    padding: 1px 8px;
+    background: #fafafa;
+}
+.value {
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-top: 6px;
+    letter-spacing: -0.3px;
+}
+.unit {
+    font-size: 14px;
+    color: #6b7280;
+    margin-left: 6px;
+    font-weight: 600;
+}
+.rows {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+.kv {
+    font-size: 12px;
+    color: #374151;
+    background: #f8fafc;
+    border: 1px solid #eef2f7;
+    border-radius: 8px;
+    padding: 4px 8px;
+}
+.footer {
+    border-top: 1px dashed #eef2f7;
+    padding: 8px 12px;
+    background: #fbfdff;
+    font-size: 12px;
+    color: #6b7280;
+}
+.spark {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 45%;
+    height: 55%;
+    opacity: 0.9;
+    pointer-events: none;
+}
+.good {
+    color: #059669;
+}
+.bad {
+    color: #dc2626;
+}
+.neutral {
+    color: #6b7280;
+}
