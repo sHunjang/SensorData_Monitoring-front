@@ -171,9 +171,6 @@ export default function SolarPresenter({
                         <div className={styles.chartTitle}>Irradiance (W/m²)</div>
                         <div className={styles.chartControls}>
                             <span style={{ fontSize: 11, color: '#94a3b8' }}>Points: {data.length}</span>
-                            {currentPeakLimit && (
-                                <span style={{ marginLeft: 8, color: '#f6465d' }}>Limit: {currentPeakLimit}</span>
-                            )}
                         </div>
                     </div>
 
@@ -184,8 +181,6 @@ export default function SolarPresenter({
                         xKey="bucket"
                         zoomLevel={zoomLevel}
                         preset={preset}
-                        peakLimit={currentPeakLimit ?? undefined}
-                        peakLimitLabel={currentPeakLimit ? `임계값: ${currentPeakLimit} W/m²` : undefined}
                         onDataPointClick={onDataPointClick}
                         csvExport={{
                             apiPath: '/data/solar/query',

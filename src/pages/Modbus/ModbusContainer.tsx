@@ -6,32 +6,50 @@ import { getErrorMessage } from '@/lib/http';
 type Preset = '1day' | '1week' | '1month' | '1year';
 type ZoomLevel = 0 | 1 | 2 | 3;
 
+// ✅ 요구사항에 맞춘 ZOOM 설정
 const ZOOMS: Record<
     ZoomLevel,
-    { preset: Preset; label: string; realtime: boolean; maxPoints: number; intervalMs: number }
+    {
+        preset: Preset;
+        label: string;
+        realtime: boolean;
+        maxPoints: number;
+        intervalMs: number;
+        panUnit: 'day' | 'week' | 'month' | 'year'; // ✅ 추가
+    }
 > = {
-    0: { preset: '1day', label: '1일', realtime: true, maxPoints: 1440, intervalMs: 60000 },
-    1: { preset: '1week', label: '1주', realtime: true, maxPoints: 672, intervalMs: 900000 },
-    2: { preset: '1month', label: '1개월', realtime: false, maxPoints: 720, intervalMs: 3600000 },
-    3: { preset: '1year', label: '1년', realtime: false, maxPoints: 365, intervalMs: 86400000 },
+    0: { preset: '1day', label: '1일', realtime: true, maxPoints: 1440, intervalMs: 60000, panUnit: 'day' },
+    1: { preset: '1week', label: '1주', realtime: true, maxPoints: 672, intervalMs: 900000, panUnit: 'week' },
+    2: { preset: '1month', label: '1개월', realtime: false, maxPoints: 720, intervalMs: 3600000, panUnit: 'month' },
+    3: { preset: '1year', label: '1년', realtime: false, maxPoints: 365, intervalMs: 86400000, panUnit: 'year' },
 };
 
 const DEVICE_OPTIONS = [11, 12, 13, 14, 15];
 
-const MAP = (row: any) => ({
-    bucket: row.bucket,
-    active_power: row.power ?? null,
-    voltage_ll: row.voltage ?? null,
-    voltage_ln: row.voltage ?? null,
-    current: row.current ?? null,
-    active_energy: row.energy_delta ?? null,
-    peak_power: row.peak_power ?? null,
-    reactive_power: null,
-    apparent_power: null,
-    power_factor: null,
-    reactive_energy: null,
-    apparent_energy: null,
-});
+const MAP = (row: any) => {
+    // ✅ 디버깅 로그 추가
+    console.log('[MAP] Input row:', row);
+
+    const mapped = {
+        bucket: row.bucket,
+        active_power: row.power ?? null,
+        voltage_ll: row.voltage ?? null,
+        voltage_ln: row.voltage ?? null,
+        current: row.current ?? null,
+        active_energy: row.energy_delta ?? null,
+        peak_power: row.peak_power ?? null,
+        reactive_power: null,
+        apparent_power: null,
+        power_factor: null,
+        reactive_energy: null,
+        apparent_energy: null,
+    };
+
+    // ✅ 매핑 결과 로그
+    console.log('[MAP] Mapped row:', mapped);
+
+    return mapped;
+};
 
 function calcStats(rows: any[], key: string) {
     const nums = rows.map((r) => r?.[key]).filter((v: any) => typeof v === 'number' && Number.isFinite(v)) as number[];
@@ -59,9 +77,29 @@ function toLocalInputString(d: Date) {
     )}`;
 }
 
+// ✅ Pan 유닛별 시간 계산 헬퍼
+function addTimeUnit(date: Date, unit: 'day' | 'week' | 'month' | 'year', amount: number): Date {
+    const d = new Date(date);
+    switch (unit) {
+        case 'day':
+            d.setDate(d.getDate() + amount);
+            break;
+        case 'week':
+            d.setDate(d.getDate() + amount * 7);
+            break;
+        case 'month':
+            d.setMonth(d.getMonth() + amount);
+            break;
+        case 'year':
+            d.setFullYear(d.getFullYear() + amount);
+            break;
+    }
+    return d;
+}
+
 export default function ModbusContainer() {
     const [deviceId, setDeviceId] = useState(DEVICE_OPTIONS[0]);
-    const [zoom, setZoom] = useState<ZoomLevel>(0);
+    const [zoom, setZoom] = useState<ZoomLevel>(0); // ✅ Day View 기본
     const [column, setColumn] = useState<
         | 'active_power'
         | 'reactive_power'
@@ -81,13 +119,12 @@ export default function ModbusContainer() {
     const [logs, setLogs] = useState<string[]>([]);
     const timerRef = useRef<number | undefined>(undefined);
 
-    // ✅ 임계값 상태 추가 (기본값 설정)
     const [peakLimits, setPeakLimits] = useState<Record<string, number>>({
-        active_power: 10, // 유효전력 임계값 (kW)
-        voltage_ll: 240, // 선간전압 임계값 (V)
-        voltage_ln: 240, // 상전압 임계값 (V)
-        current: 30, // 전류 임계값 (A)
-        active_energy: 1.0, // 유효전력량 임계값 (kWh)
+        active_power: 10,
+        voltage_ll: 240,
+        voltage_ln: 240,
+        current: 30,
+        active_energy: 1.0,
     });
 
     const [startAt, setStartAt] = useState<string | null>(null);
@@ -115,11 +152,19 @@ export default function ModbusContainer() {
                 const res = await fetchModbusQuery(params);
                 const rows = (res?.data ?? []).map(MAP);
                 setData(rows);
-                log(`Loaded ${rows.length} rows (${config.label}, ${res.resolution})${opts?.start ? ' range' : ''}`);
+
+                // ✅ 데이터 없을 때 오류 표시 안 함 (요구사항)
+                if (rows.length === 0) {
+                    log(`No data available for ${config.label}${opts?.start ? ' (range)' : ''}`);
+                } else {
+                    log(
+                        `Loaded ${rows.length} rows (${config.label}, ${res.resolution})${opts?.start ? ' range' : ''}`
+                    );
+                }
             } catch (e) {
                 const m = getErrorMessage(e);
                 setError(m);
-                setData([]);
+                setData([]); // ✅ 그래프 공백 유지
                 log(`Load error: ${m}`);
             } finally {
                 setLoading(false);
@@ -145,9 +190,9 @@ export default function ModbusContainer() {
         load();
         if (config.realtime) {
             timerRef.current = window.setInterval(() => load(), config.intervalMs) as unknown as number;
-            log(`Realtime polling every ${config.intervalMs}ms`);
+            log(`Realtime polling every ${config.intervalMs}ms (${config.label})`);
         } else {
-            log(`${config.label} static`);
+            log(`${config.label} static mode`);
         }
 
         return () => {
@@ -165,45 +210,61 @@ export default function ModbusContainer() {
     const onZoomIn = () => setZoom((z) => (z > 0 ? ((z - 1) as ZoomLevel) : z));
     const onZoomOut = () => setZoom((z) => (z < 3 ? ((z + 1) as ZoomLevel) : z));
 
-    const windowMs = useMemo(() => config.maxPoints * config.intervalMs, [config]);
-
+    // ✅ 요구사항에 맞춘 Pan 로직 (프리셋별 단위 이동)
     const panLeft = useCallback(() => {
         const now = Date.now();
         let sIso: string;
         let eIso: string;
+
         if (isRangeMode) {
             const s = new Date(toIsoLocal(startAt)!);
             const e = new Date(toIsoLocal(endAt)!);
-            sIso = new Date(s.getTime() - windowMs).toISOString();
-            eIso = new Date(e.getTime() - windowMs).toISOString();
+            const newStart = addTimeUnit(s, config.panUnit, -1);
+            const newEnd = addTimeUnit(e, config.panUnit, -1);
+            sIso = newStart.toISOString();
+            eIso = newEnd.toISOString();
         } else {
-            sIso = new Date(now - windowMs * 2).toISOString();
-            eIso = new Date(now - windowMs).toISOString();
+            // 현재 시점 기준으로 -1 unit
+            const end = new Date(now);
+            const start = addTimeUnit(end, config.panUnit, -1);
+            sIso = start.toISOString();
+            eIso = end.toISOString();
         }
+
         setStartAt(toLocalInputString(new Date(sIso)));
         setEndAt(toLocalInputString(new Date(eIso)));
-    }, [isRangeMode, startAt, endAt, windowMs]);
+        log(`Pan Left: -1 ${config.panUnit}`);
+    }, [isRangeMode, startAt, endAt, config, log]);
 
     const panRight = useCallback(() => {
         const now = Date.now();
         let sIso: string;
         let eIso: string;
+
         if (isRangeMode) {
             const s = new Date(toIsoLocal(startAt)!);
             const e = new Date(toIsoLocal(endAt)!);
-            sIso = new Date(s.getTime() + windowMs).toISOString();
-            eIso = new Date(e.getTime() + windowMs).toISOString();
-            if (new Date(eIso).getTime() > now) {
-                eIso = new Date(now).toISOString();
-                sIso = new Date(now - windowMs).toISOString();
+            const newStart = addTimeUnit(s, config.panUnit, 1);
+            const newEnd = addTimeUnit(e, config.panUnit, 1);
+
+            // ✅ 미래로는 이동 불가
+            if (newEnd.getTime() > now) {
+                log(`Cannot pan to future`);
+                return;
             }
+
+            sIso = newStart.toISOString();
+            eIso = newEnd.toISOString();
         } else {
-            eIso = new Date(now).toISOString();
-            sIso = new Date(now - windowMs).toISOString();
+            // 실시간 모드에서는 Right 비활성
+            log(`Real-time mode: Cannot pan right`);
+            return;
         }
+
         setStartAt(toLocalInputString(new Date(sIso)));
         setEndAt(toLocalInputString(new Date(eIso)));
-    }, [isRangeMode, startAt, endAt, windowMs]);
+        log(`Pan Right: +1 ${config.panUnit}`);
+    }, [isRangeMode, startAt, endAt, config, log]);
 
     const setRelativeRange = (minutes: number) => {
         const end = new Date();
@@ -242,8 +303,8 @@ export default function ModbusContainer() {
             loading={loading}
             error={error}
             logs={logs}
-            peakLimits={peakLimits} // ✅ 전달
-            setPeakLimits={setPeakLimits} // ✅ 전달
+            peakLimits={peakLimits}
+            setPeakLimits={setPeakLimits}
             startAt={startAt}
             endAt={endAt}
             setStartAt={setStartAt}

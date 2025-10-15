@@ -249,9 +249,9 @@ export default function EnvPresenter({
                         </div>
                         <div className={styles.chartControls}>
                             <span style={{ fontSize: 11, color: '#94a3b8' }}>Points: {data.length}</span>
-                            {currentPeakLimit != null && (
+                            {/* {currentPeakLimit != null && (
                                 <span style={{ marginLeft: 8, color: '#f6465d' }}>Limit: {currentPeakLimit}</span>
-                            )}
+                            )} */}
                         </div>
                     </div>
 
@@ -262,12 +262,12 @@ export default function EnvPresenter({
                         xKey="bucket"
                         zoomLevel={preset ? undefined : zoomLevel}
                         preset={preset}
-                        peakLimit={currentPeakLimit}
-                        peakLimitLabel={
-                            currentPeakLimit
-                                ? `${LABELS[column]} 임계값: ${currentPeakLimit}${UNITS[column]}`
-                                : undefined
-                        }
+                        // peakLimit={currentPeakLimit}
+                        // peakLimitLabel={
+                        //     currentPeakLimit
+                        //         ? `${LABELS[column]} 임계값: ${currentPeakLimit}${UNITS[column]}`
+                        //         : undefined
+                        // }
                         onDataPointClick={onDataPointClick}
                         csvExport={{
                             apiPath: '/data/env/query',
