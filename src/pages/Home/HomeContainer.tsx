@@ -1,27 +1,24 @@
 /**
  * HomeContainer.tsx
- * - 목적: Presenter 에 전달할 요약 값들을 폴링해서 수집.
+ * - 목적: 실시간 대시보드에 전달할 요약 값들을 폴링해서 수집
  * - 설계:
- *   1) Modbus: 1h preset의 마지막 포인트로 현재 전력, 1d preset으로 오늘 누적 계산
- *   2) Env/Solar: 최신 1포인트(preset=15m) 조회
- *   3) 각 호출은 실패 시 에러 상태를 설정하고 Presenter에게 전달
- *
- * 주의:
- * - API 함수(fetchModbusQuery, fetchEnvQuery, fetchSolarQuery) 시그니처는 프로젝트 기준으로 사용.
- * - getErrorMessage는 공용 에러 문자열 추출 유틸입니다.
+ *   1) Modbus (Device 11): /realtime API로 현재 전력, /today-energy API로 오늘 누적
+ *   2) Env (Device 21): /realtime API로 최신 온습도
+ *   3) Solar (Device 31): /realtime API로 최신 일사량
+ *   4) 각 호출 실패 시 에러 상태 설정
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import HomePresenter from './HomePresenter';
-import { fetchModbusQuery } from '@/api/modbus';
-import { fetchEnvQuery } from '@/api/env';
-import { fetchSolarQuery } from '@/api/solar';
+import { fetchRealtime as fetchModbusRealtime, fetchTodayEnergy } from '@/api/modbus';
+import { fetchRealtime as fetchEnvRealtime } from '@/api/env';
+import { fetchRealtime as fetchSolarRealtime } from '@/api/solar';
 import { getErrorMessage } from '@/lib/http';
-import { normalizeRows } from '@/lib/time'; // 만약 없으면 안전하게 제거 가능
 
-const MODBUS_ID = 11;
-const ENV_ID = 21;
-const SOLAR_ID = 31;
+// ✅ 명확한 Device ID 상수
+const MODBUS_DEVICE_ID = 11; // 실시간 전력 표시용
+const ENV_DEVICE_ID = 21; // 온습도 표시용
+const SOLAR_DEVICE_ID = 31; // 일사량 표시용
 
 // 안전한 숫자 추출 유틸
 function safeNum(v: any, digits?: number) {
@@ -45,94 +42,84 @@ export default function HomeContainer() {
     const [envError, setEnvError] = useState<string | null>(null);
     const [solarError, setSolarError] = useState<string | null>(null);
 
-    // 폴링 함수 (한 번에 모든 항목 조회)
+    // ✅ 폴링 함수: 각 Device ID에 맞춰 /realtime API 호출
     const poll = useCallback(async () => {
-        // 1) Modbus: 최근 1시간 데이터에서 마지막 포인트를 현재 전력으로 사용
+        console.log('🔄 [Poll] Starting poll at', new Date().toLocaleTimeString('ko-KR'));
+
+        // 1) Modbus (Device 11): 실시간 전력
         (async () => {
             try {
                 setPowerError(null);
-                const res = await fetchModbusQuery({ deviceid: MODBUS_ID, preset: '10s', maxpoints: 60 });
-                const rows = res?.data && Array.isArray(res.data) ? res.data : [];
-                const last = rows.length ? rows[rows.length - 1] : null;
-                // 여러 필드 후보에서 안전하게 찾기
-                const candidates = ['totalactivepowerkw', 'p_kw', 'power', 'total_active_power_kw'];
-                let v: any = null;
-                for (const k of candidates) {
-                    if (last && k in last) {
-                        v = last[k];
-                        break;
-                    }
-                }
-                setPower(safeNum(v, 2));
+                console.log('🔍 [Modbus] Fetching realtime...');
+                const res = await fetchModbusRealtime(MODBUS_DEVICE_ID);
+                console.log('✅ [Modbus] Response:', res);
+                console.log('✅ [Modbus] Power value:', res.power);
+                setPower(safeNum(res.power, 2));
             } catch (e) {
+                console.error('❌ [Modbus] Error:', e);
                 setPower(null);
                 setPowerError(getErrorMessage(e));
             }
         })();
 
-        // 2) Modbus: 당일 누적 근사 (1d preset 의 최댓값 - 최솟값)
+        // 2) Modbus (Device 11): 오늘 누적 에너지
         (async () => {
             try {
                 setTodayError(null);
-                const res = await fetchModbusQuery({ deviceid: MODBUS_ID, preset: '10s', maxpoints: 1440 });
-                const rows = res?.data && Array.isArray(res.data) ? res.data : [];
-                const nums = rows
-                    .map((r: any) => r?.totalactiveenergykwh ?? r?.e_kwh ?? r?.energy ?? null)
-                    .map((x: any) => Number(x))
-                    .filter((n: number) => Number.isFinite(n));
-                const kwh = nums.length ? Number((Math.max(...nums) - Math.min(...nums)).toFixed(2)) : null;
-                setTodayKwh(kwh);
+                const res = await fetchTodayEnergy(MODBUS_DEVICE_ID);
+                console.log('✅ [Today Energy] Response:', res);
+                setTodayKwh(safeNum(res.energy_kwh, 2));
             } catch (e) {
+                console.error('❌ [Today Energy] Error:', e);
                 setTodayKwh(null);
                 setTodayError(getErrorMessage(e));
             }
         })();
 
-        // 3) Env: 최신 1건 (preset=15m, maxpoints=1)
+        // 3) Env (Device 21): 실시간 온습도
         (async () => {
             try {
                 setEnvError(null);
-                const res = await fetchEnvQuery({ deviceid: ENV_ID, preset: '10s', maxpoints: 1 });
-                const rows = res?.data && Array.isArray(res.data) ? res.data : [];
-                const rowsNorm = typeof normalizeRows === 'function' ? normalizeRows(rows) : rows;
-                const last = rowsNorm.length ? rowsNorm[rowsNorm.length - 1] : null;
-                const t = last?.temperature ?? last?.temperature_c ?? last?.temp ?? null;
-                const h = last?.humidity ?? last?.humidity_rh ?? last?.hum ?? null;
-                setTemperature(safeNum(t, 1));
-                setHumidity(safeNum(h, 1));
+                const res = await fetchEnvRealtime(ENV_DEVICE_ID);
+                console.log('✅ [Env] Response:', res);
+                setTemperature(safeNum(res.temperature, 1));
+                setHumidity(safeNum(res.humidity, 1));
             } catch (e) {
+                console.error('❌ [Env] Error:', e);
                 setTemperature(null);
                 setHumidity(null);
                 setEnvError(getErrorMessage(e));
             }
         })();
 
-        // 4) Solar: 최신 1건 (preset=15m, maxpoints=1)
+        // 4) Solar (Device 31): 실시간 일사량
         (async () => {
             try {
                 setSolarError(null);
-                const res = await fetchSolarQuery({ deviceid: SOLAR_ID, preset: '10s', maxpoints: 1 });
-                const rows = res?.data && Array.isArray(res.data) ? res.data : [];
-                const rowsNorm = typeof normalizeRows === 'function' ? normalizeRows(rows) : rows;
-                const last = rowsNorm.length ? rowsNorm[rowsNorm.length - 1] : null;
-                const s = last?.irradiance ?? last?.solar ?? last?.solar_irradiance_wm2 ?? null;
-                setSolar(safeNum(s, 0));
+                const res = await fetchSolarRealtime(SOLAR_DEVICE_ID);
+                console.log('✅ [Solar] Response:', res);
+                setSolar(safeNum(res.irradiance, 0));
             } catch (e) {
+                console.error('❌ [Solar] Error:', e);
                 setSolar(null);
                 setSolarError(getErrorMessage(e));
             }
         })();
     }, []);
 
-    // 컴포넌트 마운트 시 즉시 호출하고 30초 단위로 폴링
+    // 컴포넌트 마운트 시 즉시 호출하고 5초 단위로 폴링
     const mountedRef = useRef(true);
+
     useEffect(() => {
         mountedRef.current = true;
         poll();
+
+        // 5초마다 폴링 (백엔드 수집 주기와 동일)
         const id = setInterval(() => {
             if (!mountedRef.current) return;
             poll();
-        }, 30000);
+        }, 5000);
+
         return () => {
             mountedRef.current = false;
             clearInterval(id);

@@ -1,11 +1,14 @@
 // src/api/modbus.ts
-// - 레거시 함수(fetchRealtime/fetchTodayEnergy)도 /data/modbus/query로 우회
-// - 신규 쿼리(fetchModbusQuery)는 그대로 유지(여기서는 예시로 최소 구현만 기재)
+// Modbus(전력량계) API 클라이언트
 
 import { fetchJSON } from '@/lib/http';
 
+// ============================================================
+// 타입 정의
+// ============================================================
+
 export interface ModbusQueryParams {
-    preset?: '10s' | '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
+    preset?: '1day' | '1week' | '1month' | '1year';
     maxpoints?: number;
     start?: string;
     end?: string;
@@ -13,55 +16,139 @@ export interface ModbusQueryParams {
 }
 
 export interface ModbusDataPoint {
-    bucket: string | null;
-    totalactivepowerkw?: number | null;
-    totalactiveenergykwh?: number | null;
-    [key: string]: any;
+    bucket: string;
+    voltage: number | null;
+    current: number | null;
+    power: number | null;
+    energy_delta: number | null;
+    peak_power?: number | null;
 }
 
 export interface ModbusQueryResponse {
+    device_id: number;
+    wire_type: '4wire' | '3wire';
+    resolution: '1min' | '15min' | '1hour' | '1day';
+    start: string;
+    end: string;
+    data_points: number;
     data: ModbusDataPoint[];
-    count?: number;
-    preset?: string;
-    device_id?: number;
-    time_range?: { start: string; end: string };
-    error?: string;
 }
 
-/** 신규 쿼리: /data/modbus/query */
-export async function fetchModbusQuery(params: ModbusQueryParams = {}): Promise<ModbusQueryResponse> {
+export interface ModbusRealtimeResponse {
+    time_stamp: string;
+    device_id: number;
+    voltage: number | null;
+    current: number | null;
+    power: number | null;
+    energy: number | null;
+}
+
+export interface ModbusTodayEnergyResponse {
+    device_id: number;
+    date: string;
+    energy_kwh: number | null;
+    wire_type: '4wire' | '3wire';
+}
+
+export interface ModbusStatisticsResponse {
+    device_id: number;
+    total_energy_kwh: number;
+    avg_power_kw: number;
+    peak_power_kw: number;
+    period_days: number;
+    wire_type: '4wire' | '3wire';
+}
+
+// ============================================================
+// API 함수
+// ============================================================
+
+/**
+ * 시계열 데이터 조회 (그래프용)
+ */
+export async function fetchModbusQuery(
+    params: ModbusQueryParams = {}
+): Promise<ModbusQueryResponse> {
     const q = new URLSearchParams();
-    q.set('preset', params.preset ?? '1h');
+    q.set('preset', params.preset ?? '1day');
     if (params.start) q.set('start', params.start);
     if (params.end) q.set('end', params.end);
-    q.set('maxpoints', String(params.maxpoints ?? 336));
-    if (params.deviceid != null) q.set('deviceid', String(params.deviceid));
+    q.set('maxpoints', String(params.maxpoints ?? 1440));
+    if (params.deviceid != null) {
+        q.set('deviceid', String(params.deviceid));
+    } else {
+        throw new Error('deviceid is required');
+    }
     return await fetchJSON<ModbusQueryResponse>(`/data/modbus/query?${q.toString()}`);
 }
 
-/** 레거시 실시간: 내부적으로 1h 창의 마지막 포인트로 대체 */
-export async function fetchRealtime(deviceId: number) {
-    const q = new URLSearchParams({ deviceid: String(deviceId), preset: '1h', maxpoints: '1' });
-    const json = await fetchJSON<ModbusQueryResponse>(`/data/modbus/query?${q.toString()}`);
-    const rows = Array.isArray(json?.data) ? json.data : [];
-    const last = rows[rows.length - 1] ?? null;
+/**
+ * ✅ 실시간 데이터 조회 (최신 1건)
+ * 백엔드가 단일 객체를 반환합니다.
+ */
+export async function fetchRealtime(deviceId: number): Promise<ModbusRealtimeResponse> {
+    const q = new URLSearchParams({ deviceid: String(deviceId) });
+
+    console.log('🌐 [API] Calling /data/modbus/realtime with deviceId:', deviceId);
+
+    // ✅ /realtime 엔드포인트 호출 (단일 객체 반환)
+    const result = await fetchJSON<ModbusRealtimeResponse>(`/data/modbus/realtime?${q.toString()}`);
+
+    console.log('🌐 [API] /realtime response:', result);
+
+    return result;
+}
+
+/**
+ * ✅ 오늘 누적 에너지 조회
+ */
+export async function fetchTodayEnergy(deviceId: number): Promise<ModbusTodayEnergyResponse> {
+    const q = new URLSearchParams({ deviceid: String(deviceId) });
+    return await fetchJSON<ModbusTodayEnergyResponse>(`/data/modbus/today-energy?${q.toString()}`);
+}
+
+/**
+ * 통계 조회 (최근 N일)
+ */
+export async function fetchStatistics(
+    deviceId: number,
+    days: number = 7
+): Promise<ModbusStatisticsResponse> {
+    const q = new URLSearchParams({
+        deviceid: String(deviceId),
+        days: String(days)
+    });
+    return await fetchJSON<ModbusStatisticsResponse>(`/data/modbus/statistics?${q.toString()}`);
+}
+
+// ============================================================
+// 레거시 호환 함수 (deprecated)
+// ============================================================
+
+/**
+ * @deprecated fetchRealtime 사용 권장
+ */
+export async function fetchModbusRealtime(deviceId: number) {
+    const data = await fetchRealtime(deviceId);
     return {
-        deviceid: deviceId,
-        timestamp: last?.bucket ?? null,
+        deviceid: data.device_id,
+        timestamp: data.time_stamp,
         metrics: {
-            pkw: last?.totalactivepowerkw ?? null,
-            ekwh: last?.totalactiveenergykwh ?? null,
+            pkw: data.power,
+            ekwh: data.energy,
         },
-        raw: last,
+        raw: data,
     };
 }
 
-/** 레거시 금일에너지: 내부적으로 1d 창의 누적 근사(최대-최소) */
-export async function fetchTodayEnergy(deviceId: number) {
-    const q = new URLSearchParams({ deviceid: String(deviceId), preset: '1d', maxpoints: '1440' });
-    const json = await fetchJSON<ModbusQueryResponse>(`/data/modbus/query?${q.toString()}`);
-    const rows = Array.isArray(json?.data) ? json.data : [];
-    const nums = rows.map(r => r?.totalactiveenergykwh).filter((v: any) => typeof v === 'number' && Number.isFinite(v)) as number[];
-    const kwh = nums.length ? Number((Math.max(...nums) - Math.min(...nums)).toFixed(2)) : null;
-    return { deviceid: deviceId, kwh, raw: rows };
+/**
+ * @deprecated fetchTodayEnergy 사용 권장
+ */
+export async function fetchModbusTodayEnergy(deviceId: number) {
+    const data = await fetchTodayEnergy(deviceId);
+    return {
+        deviceid: data.device_id,
+        kwh: data.energy_kwh,
+        raw: data,
+    };
 }

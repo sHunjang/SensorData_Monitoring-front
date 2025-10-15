@@ -13,8 +13,10 @@ import {
 } from 'recharts';
 import CsvDownloader from '../common/CsvDownloader';
 
-type Preset = '10s' | '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
+// ✅ 새 백엔드 preset 타입
+type Preset = '1day' | '1week' | '1month' | '1year';
 
+// ✅ 새 백엔드에 맞춘 포맷터
 const PRESET_FORMATTERS: Record<
     Preset,
     {
@@ -25,58 +27,35 @@ const PRESET_FORMATTERS: Record<
         height?: number;
     }
 > = {
-    '10s': {
-        // 초 단위: HH:mm:ss
+    '1day': {
+        // 1일: HH:mm (1분 해상도)
         format: (ms) =>
             new Intl.DateTimeFormat('ko-KR', {
                 hour: '2-digit',
                 minute: '2-digit',
-                second: '2-digit',
                 timeZone: 'Asia/Seoul',
             }).format(new Date(ms)),
         tooltip: (ms) =>
             new Date(ms).toLocaleString('ko-KR', {
                 timeZone: 'Asia/Seoul',
                 year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+            }),
+        name: '1일 (1분)',
+        rotateLabel: true,
+        height: 60,
+    },
+    '1week': {
+        // 1주: MM/dd HH:mm (15분 해상도)
+        format: (ms) =>
+            new Intl.DateTimeFormat('ko-KR', {
                 month: '2-digit',
                 day: '2-digit',
                 hour: '2-digit',
                 minute: '2-digit',
-                second: '2-digit',
-            }),
-        name: '10초',
-        rotateLabel: true,
-        height: 60,
-    },
-    '1m': {
-        // 1분: HH:mm:ss (show seconds)
-        format: (ms) =>
-            new Intl.DateTimeFormat('ko-KR', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                timeZone: 'Asia/Seoul',
-            }).format(new Date(ms)),
-        tooltip: (ms) =>
-            new Date(ms).toLocaleString('ko-KR', {
-                timeZone: 'Asia/Seoul',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-            }),
-        name: '1분',
-        rotateLabel: true,
-        height: 60,
-    },
-    '15m': {
-        // 15분: HH:mm
-        format: (ms) =>
-            new Intl.DateTimeFormat('ko-KR', {
-                hour: '2-digit',
-                minute: '2-digit',
                 timeZone: 'Asia/Seoul',
             }).format(new Date(ms)),
         tooltip: (ms) =>
@@ -88,37 +67,17 @@ const PRESET_FORMATTERS: Record<
                 hour: '2-digit',
                 minute: '2-digit',
             }),
-        name: '15분',
+        name: '1주 (15분)',
         rotateLabel: true,
         height: 60,
     },
-    '1h': {
-        // 1시간 (분 간격): HH:mm
-        format: (ms) =>
-            new Intl.DateTimeFormat('ko-KR', {
-                hour: '2-digit',
-                minute: '2-digit',
-                timeZone: 'Asia/Seoul',
-            }).format(new Date(ms)),
-        tooltip: (ms) =>
-            new Date(ms).toLocaleString('ko-KR', {
-                timeZone: 'Asia/Seoul',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-            }),
-        name: '1시간 (분)',
-        rotateLabel: true,
-        height: 60,
-    },
-    '1d': {
-        // 1일: MM/dd HH:mm (or MM/dd)
+    '1month': {
+        // 1개월: MM/dd HH시 (1시간 해상도)
         format: (ms) =>
             new Intl.DateTimeFormat('ko-KR', {
                 month: '2-digit',
                 day: '2-digit',
+                hour: '2-digit',
                 timeZone: 'Asia/Seoul',
             }).format(new Date(ms)),
         tooltip: (ms) =>
@@ -127,34 +86,14 @@ const PRESET_FORMATTERS: Record<
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
+                hour: '2-digit',
             }),
-        name: '1일',
+        name: '1개월 (1시간)',
         rotateLabel: false,
         height: 48,
     },
-    '1w': {
-        // 1주: MM/dd (weekday)
-        format: (ms) =>
-            new Intl.DateTimeFormat('ko-KR', {
-                month: '2-digit',
-                day: '2-digit',
-                weekday: 'short',
-                timeZone: 'Asia/Seoul',
-            }).format(new Date(ms)),
-        tooltip: (ms) =>
-            new Date(ms).toLocaleDateString('ko-KR', {
-                timeZone: 'Asia/Seoul',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                weekday: 'long',
-            }),
-        name: '1주 (일별)',
-        rotateLabel: false,
-        height: 48,
-    },
-    '1mo': {
-        // 1달: MM/dd
+    '1year': {
+        // 1년: MM/dd (1일 해상도)
         format: (ms) =>
             new Intl.DateTimeFormat('ko-KR', {
                 month: '2-digit',
@@ -167,8 +106,9 @@ const PRESET_FORMATTERS: Record<
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
+                weekday: 'long',
             }),
-        name: '1달 (일별)',
+        name: '1년 (1일)',
         rotateLabel: false,
         height: 48,
     },
@@ -179,7 +119,6 @@ interface LineChartWrapperProps {
     keys: string[];
     labels: Record<string, string>;
     xKey?: string;
-    // 기존 zoomLevel 유지 가능. 새로 preset을 주면 preset 우선 사용.
     zoomLevel?: number;
     preset?: Preset;
     peakLimit?: number;
@@ -199,7 +138,7 @@ export default function LineChartWrapper({
     keys,
     labels,
     xKey = 'bucket',
-    zoomLevel = 3,
+    zoomLevel = 0, // ✅ 기본값 0 (1day)
     preset,
     peakLimit,
     peakLimitLabel,
@@ -208,27 +147,21 @@ export default function LineChartWrapper({
     height = 400,
     colors = ['#0ecb81', '#f7931e', '#f6465d', '#26a69a', '#9c27b0'],
 }: LineChartWrapperProps) {
-    // 결정 로직: preset 우선, 없으면 zoomLevel -> preset 매핑
+    // ✅ preset 우선, 없으면 zoomLevel → preset 매핑
     const effectivePreset = useMemo<Preset>(() => {
         if (preset) return preset;
-        // fallback 매핑: zoomLevel 0..6 -> presets
+        // zoomLevel 0..3 → presets
         switch (zoomLevel) {
             case 0:
-                return '10s';
+                return '1day';
             case 1:
-                return '1m';
+                return '1week';
             case 2:
-                return '15m';
+                return '1month';
             case 3:
-                return '1h';
-            case 4:
-                return '1d';
-            case 5:
-                return '1w';
-            case 6:
-                return '1mo';
+                return '1year';
             default:
-                return '1h';
+                return '1day';
         }
     }, [preset, zoomLevel]);
 
@@ -387,10 +320,11 @@ export default function LineChartWrapper({
             </ResponsiveContainer>
 
             <div style={{ marginTop: 12, fontSize: 11, color: '#8c9196', textAlign: 'center' }}>
-                {(['1w', '1mo'] as Preset[]).includes(effectivePreset) && onDataPointClick && (
+                {/* ✅ 새 preset에 맞춘 메시지 */}
+                {(['1month', '1year'] as Preset[]).includes(effectivePreset) && onDataPointClick && (
                     <span>💡 데이터 포인트를 클릭하면 더 자세한 시간 범위로 드릴다운됩니다</span>
                 )}
-                {(['10s', '1m', '15m', '1h'] as Preset[]).includes(effectivePreset) && (
+                {(['1day', '1week'] as Preset[]).includes(effectivePreset) && (
                     <span>🔄 실시간으로 데이터가 업데이트됩니다</span>
                 )}
             </div>

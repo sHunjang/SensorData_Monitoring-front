@@ -3,20 +3,17 @@ import SolarPresenter from './SolarPresenter';
 import { fetchSolarQuery } from '@/api/solar';
 import { getErrorMessage } from '@/lib/http';
 
-type Preset = '10s' | '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
-type ZoomLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+type Preset = '1day' | '1week' | '1month' | '1year';
+type ZoomLevel = 0 | 1 | 2 | 3;
 
 const ZOOMS: Record<
     ZoomLevel,
     { preset: Preset; label: string; realtime: boolean; maxPoints: number; intervalMs: number }
 > = {
-    0: { preset: '10s', label: '10초', realtime: true, maxPoints: 60, intervalMs: 10000 },
-    1: { preset: '1m', label: '1분', realtime: true, maxPoints: 120, intervalMs: 15000 },
-    2: { preset: '15m', label: '15분', realtime: true, maxPoints: 60, intervalMs: 20000 },
-    3: { preset: '1h', label: '1시간', realtime: true, maxPoints: 60, intervalMs: 30000 },
-    4: { preset: '1d', label: '1일', realtime: false, maxPoints: 1440, intervalMs: 60000 },
-    5: { preset: '1w', label: '1주', realtime: false, maxPoints: 336, intervalMs: 60000 },
-    6: { preset: '1mo', label: '1개월', realtime: false, maxPoints: 31, intervalMs: 60000 },
+    0: { preset: '1day', label: '1일', realtime: true, maxPoints: 1440, intervalMs: 60000 },
+    1: { preset: '1week', label: '1주', realtime: true, maxPoints: 672, intervalMs: 900000 },
+    2: { preset: '1month', label: '1개월', realtime: false, maxPoints: 720, intervalMs: 3600000 },
+    3: { preset: '1year', label: '1년', realtime: false, maxPoints: 365, intervalMs: 86400000 },
 };
 
 const DEVICE_OPTIONS = [31];
@@ -37,7 +34,9 @@ function calcStats(rows: any[]) {
 
 const MAP = (row: any) => ({
     bucket: row.bucket,
-    irradiance: typeof row.irradiance === 'number' && Number.isFinite(row.irradiance) ? row.irradiance : null,
+    irradiance: row.avg_irradiance ?? null,
+    min_irradiance: row.min_irradiance ?? null,
+    max_irradiance: row.max_irradiance ?? null,
 });
 
 function toIsoLocal(value?: string | null) {
@@ -55,20 +54,17 @@ function toLocalInputString(d: Date) {
 }
 
 export default function SolarContainer() {
-    const [deviceId, setDeviceId] = useState<number>(DEVICE_OPTIONS[0]);
-    const [zoom, setZoom] = useState<ZoomLevel>(0);
-    const [data, setData] = useState<any[]>([]);
+    const [deviceId, setDeviceId] = useState(DEVICE_OPTIONS[0]);
+    const [zoom, setZoom] = useState<ZoomLevel>(0); // ✅ 타입 추가
+    const [data, setData] = useState<any[]>([]); // ✅ 타입 추가
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [logs, setLogs] = useState<string[]>([]);
-    const timerRef = useRef<number | undefined>(undefined);
-
+    const [error, setError] = useState<string | null>(null); // ✅ 타입 추가
+    const [logs, setLogs] = useState<string[]>([]); // ✅ 타입 추가
+    const timerRef = useRef<number | undefined>(undefined); // ✅ 타입 추가
     const [peakLimits, setPeakLimits] = useState<Record<string, number>>({ solar: 1000 });
-
-    const [startAt, setStartAt] = useState<string | null>(null);
-    const [endAt, setEndAt] = useState<string | null>(null);
+    const [startAt, setStartAt] = useState<string | null>(null); // ✅ 타입 추가
+    const [endAt, setEndAt] = useState<string | null>(null); // ✅ 타입 추가
     const isRangeMode = Boolean(startAt && endAt);
-
     const config = ZOOMS[zoom];
 
     const log = useCallback((msg: string) => {
@@ -91,7 +87,7 @@ export default function SolarContainer() {
                 const res = await fetchSolarQuery(params);
                 const rows = (res?.data ?? []).map(MAP);
                 setData(rows);
-                log(`Loaded ${rows.length} rows (${config.label})${opts?.start ? ' range' : ''}`);
+                log(`Loaded ${rows.length} rows (${config.label}, ${res.resolution})${opts?.start ? ' range' : ''}`);
             } catch (e) {
                 const m = getErrorMessage(e);
                 setError(m);
@@ -107,7 +103,6 @@ export default function SolarContainer() {
     useEffect(() => {
         const sIso = toIsoLocal(startAt);
         const eIso = toIsoLocal(endAt);
-
         if (timerRef.current) {
             window.clearInterval(timerRef.current);
             timerRef.current = undefined;
@@ -122,10 +117,11 @@ export default function SolarContainer() {
         load();
         if (config.realtime) {
             timerRef.current = window.setInterval(() => load(), config.intervalMs) as unknown as number;
-            log(`Realtime polling every ${config.intervalMs}ms (${config.label})`);
+            log(`Realtime polling ${config.intervalMs}ms (${config.label})`);
         } else {
-            log(`${config.label} static mode`);
+            log(`${config.label} static`);
         }
+
         return () => {
             if (timerRef.current) window.clearInterval(timerRef.current);
         };
@@ -188,14 +184,14 @@ export default function SolarContainer() {
             deviceId={deviceId}
             setDeviceId={setDeviceId}
             deviceOptions={DEVICE_OPTIONS}
-            zoomLevel={zoom}
+            zoomLevel={zoom} // ✅ zoom → zoomLevel
             zoomLabel={config.label}
-            preset={config.preset}
+            preset={config.preset} // ✅ preset 추가
             onZoomIn={onZoomIn}
             onZoomOut={onZoomOut}
             canZoomIn={zoom > 0}
             canZoomOut={zoom < 3}
-            onDataPointClick={(d, t) => {
+            onDataPointClick={(_d, _t) => {
                 if (zoom === 3) setZoom(2);
                 else if (zoom === 2) setZoom(1);
                 else if (zoom === 1) setZoom(0);
@@ -212,7 +208,6 @@ export default function SolarContainer() {
             error={error}
             logs={logs}
             peakLimits={peakLimits}
-            setPeakLimits={setPeakLimits}
             startAt={startAt}
             endAt={endAt}
             setStartAt={setStartAt}

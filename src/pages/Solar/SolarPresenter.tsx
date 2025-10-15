@@ -4,6 +4,7 @@ import ZoomPanControls from '@/components/ui/ZoomPanControls';
 import styles from './Solar.module.css';
 
 type Stat = { avg: number | null; max: number | null; min: number | null; count: number };
+type Preset = '1day' | '1week' | '1month' | '1year';
 
 type Props = {
     deviceId: number;
@@ -11,7 +12,7 @@ type Props = {
     deviceOptions: number[];
     zoomLevel: number;
     zoomLabel: string;
-    preset?: '10s' | '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
+    preset?: Preset;
     onZoomIn: () => void;
     onZoomOut: () => void;
     canZoomIn: boolean;

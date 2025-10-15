@@ -5,7 +5,7 @@ import styles from './Env.module.css';
 
 type Stat = { avg: number | null; max: number | null; min: number | null; count: number };
 type Column = 'temperature' | 'humidity';
-type Preset = '10s' | '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
+type Preset = '1day' | '1week' | '1month' | '1year';
 
 type Props = {
     deviceId: number;
@@ -200,16 +200,10 @@ export default function EnvPresenter({
                             <label>임계값 ({UNITS[column]})</label>
                             <input
                                 type="number"
-                                step={column === 'temperature' ? '0.1' : '1'}
+                                step="0.1"
                                 value={currentPeakLimit ?? ''}
                                 onChange={(e) => handlePeakLimitChange(e.target.value)}
-                                placeholder={`예: ${column === 'temperature' ? '30.0' : '80'}`}
-                                style={{
-                                    background: '#2b2f36',
-                                    border: '1px solid #2e3238',
-                                    color: '#f7f8fa',
-                                    padding: '8px',
-                                }}
+                                placeholder="예: 10.0"
                             />
                         </div>
 

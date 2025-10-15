@@ -17,7 +17,7 @@ type Column =
     | 'reactive_energy'
     | 'apparent_energy';
 
-type Preset = '10s' | '1m' | '15m' | '1h' | '1d' | '1w' | '1mo';
+type Preset = '1day' | '1week' | '1month' | '1year';
 
 type Props = {
     deviceId: number;
