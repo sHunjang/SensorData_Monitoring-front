@@ -80,7 +80,16 @@ export default function ModbusContainer() {
     const [error, setError] = useState<string | null>(null);
     const [logs, setLogs] = useState<string[]>([]);
     const timerRef = useRef<number | undefined>(undefined);
-    const [peakLimits, setPeakLimits] = useState<Record<string, number>>({});
+
+    // ✅ 임계값 상태 추가 (기본값 설정)
+    const [peakLimits, setPeakLimits] = useState<Record<string, number>>({
+        active_power: 10, // 유효전력 임계값 (kW)
+        voltage_ll: 240, // 선간전압 임계값 (V)
+        voltage_ln: 240, // 상전압 임계값 (V)
+        current: 30, // 전류 임계값 (A)
+        active_energy: 1.0, // 유효전력량 임계값 (kWh)
+    });
+
     const [startAt, setStartAt] = useState<string | null>(null);
     const [endAt, setEndAt] = useState<string | null>(null);
     const isRangeMode = Boolean(startAt && endAt);
@@ -210,9 +219,9 @@ export default function ModbusContainer() {
             deviceOptions={DEVICE_OPTIONS}
             column={column}
             setColumn={setColumn}
-            zoomLevel={zoom} // ✅ zoom → zoomLevel
+            zoomLevel={zoom}
             zoomLabel={config.label}
-            preset={config.preset} // ✅ preset 추가
+            preset={config.preset}
             onZoomIn={onZoomIn}
             onZoomOut={onZoomOut}
             canZoomIn={zoom > 0}
@@ -233,8 +242,8 @@ export default function ModbusContainer() {
             loading={loading}
             error={error}
             logs={logs}
-            peakLimits={peakLimits}
-            setPeakLimits={setPeakLimits}
+            peakLimits={peakLimits} // ✅ 전달
+            setPeakLimits={setPeakLimits} // ✅ 전달
             startAt={startAt}
             endAt={endAt}
             setStartAt={setStartAt}
