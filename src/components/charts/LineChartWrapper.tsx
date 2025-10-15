@@ -244,7 +244,7 @@ export default function LineChartWrapper({
 
         if (effectivePreset === '1day') {
             const ticks: number[] = [];
-            for (let hour = 0; hour < 24; hour += 3) {
+            for (let hour = 0; hour < 24; hour += 4) {
                 ticks.push(new Date(year, month, day, hour, 0, 0, 0).getTime());
             }
             return ticks;

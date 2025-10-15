@@ -145,42 +145,250 @@ export default function EnvContainer() {
     const windowMs = useMemo(() => config.maxPoints * config.intervalMs, [config]);
 
     const panLeft = useCallback(() => {
-        const now = Date.now();
         let sIso: string;
         let eIso: string;
-        if (isRangeMode) {
-            const s = new Date(toIsoLocal(startAt)!);
-            const e = new Date(toIsoLocal(endAt)!);
-            sIso = new Date(s.getTime() - windowMs).toISOString();
-            eIso = new Date(e.getTime() - windowMs).toISOString();
+
+        // ✅ 현재 범위가 있으면 그 기준으로 이동
+        if (startAt && endAt) {
+            const currentStart = new Date(startAt);
+            const currentEnd = new Date(endAt);
+
+            if (config.preset === '1day') {
+                // 현재 표시된 날짜의 전날
+                const prevDayStart = new Date(currentStart);
+                prevDayStart.setDate(currentStart.getDate() - 1);
+                prevDayStart.setHours(0, 0, 0, 0);
+
+                const prevDayEnd = new Date(prevDayStart);
+                prevDayEnd.setHours(23, 59, 59, 999);
+
+                sIso = prevDayStart.toISOString();
+                eIso = prevDayEnd.toISOString();
+            } else if (config.preset === '1week') {
+                // 현재 표시된 주의 지난주
+                const prevWeekStart = new Date(currentStart);
+                prevWeekStart.setDate(currentStart.getDate() - 7);
+
+                const prevWeekEnd = new Date(currentEnd);
+                prevWeekEnd.setDate(currentEnd.getDate() - 7);
+
+                sIso = prevWeekStart.toISOString();
+                eIso = prevWeekEnd.toISOString();
+            } else if (config.preset === '1month') {
+                // 현재 표시된 달의 지난달
+                const prevMonthStart = new Date(currentStart);
+                prevMonthStart.setMonth(currentStart.getMonth() - 1);
+
+                const prevMonthEnd = new Date(prevMonthStart);
+                prevMonthEnd.setMonth(prevMonthStart.getMonth() + 1);
+                prevMonthEnd.setDate(0); // 지난달 마지막 날
+                prevMonthEnd.setHours(23, 59, 59, 999);
+
+                sIso = prevMonthStart.toISOString();
+                eIso = prevMonthEnd.toISOString();
+            } else if (config.preset === '1year') {
+                // 현재 표시된 연도의 작년
+                const prevYearStart = new Date(currentStart);
+                prevYearStart.setFullYear(currentStart.getFullYear() - 1);
+
+                const prevYearEnd = new Date(prevYearStart);
+                prevYearEnd.setMonth(11, 31);
+                prevYearEnd.setHours(23, 59, 59, 999);
+
+                sIso = prevYearStart.toISOString();
+                eIso = prevYearEnd.toISOString();
+            } else {
+                return;
+            }
         } else {
-            sIso = new Date(now - windowMs * 2).toISOString();
-            eIso = new Date(now - windowMs).toISOString();
+            // ✅ 범위가 없으면 오늘 기준
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            if (config.preset === '1day') {
+                const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+                yesterday.setHours(0, 0, 0, 0);
+
+                sIso = yesterday.toISOString();
+
+                const yesterdayEnd = new Date(yesterday);
+                yesterdayEnd.setHours(23, 59, 59, 999);
+                eIso = yesterdayEnd.toISOString();
+            } else if (config.preset === '1week') {
+                const weekday = today.getDay();
+                const thisMonday = new Date(today);
+                thisMonday.setDate(today.getDate() - ((weekday + 6) % 7));
+                thisMonday.setHours(0, 0, 0, 0);
+
+                const lastMonday = new Date(thisMonday);
+                lastMonday.setDate(thisMonday.getDate() - 7);
+
+                const lastSunday = new Date(thisMonday);
+                lastSunday.setDate(thisMonday.getDate() - 1);
+                lastSunday.setHours(23, 59, 59, 999);
+
+                sIso = lastMonday.toISOString();
+                eIso = lastSunday.toISOString();
+            } else if (config.preset === '1month') {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = now.getMonth();
+
+                let lastMonthYear = year;
+                let lastMonth = month - 1;
+                if (lastMonth < 0) {
+                    lastMonth = 11;
+                    lastMonthYear -= 1;
+                }
+
+                const firstDay = new Date(lastMonthYear, lastMonth, 1, 0, 0, 0, 0);
+                const lastDay = new Date(lastMonthYear, lastMonth + 1, 0, 23, 59, 59, 999);
+
+                sIso = firstDay.toISOString();
+                eIso = lastDay.toISOString();
+            } else if (config.preset === '1year') {
+                const now = new Date();
+                const lastYear = now.getFullYear() - 1;
+
+                const firstDay = new Date(lastYear, 0, 1, 0, 0, 0, 0);
+                const lastDay = new Date(lastYear, 11, 31, 23, 59, 59, 999);
+
+                sIso = firstDay.toISOString();
+                eIso = lastDay.toISOString();
+            } else {
+                return;
+            }
         }
+
         setStartAt(toLocalInputString(new Date(sIso)));
         setEndAt(toLocalInputString(new Date(eIso)));
-    }, [isRangeMode, startAt, endAt, windowMs]);
+        log(`좌 이동: ${config.label} 단위`);
+    }, [config, log, startAt, endAt]); // ✅ startAt, endAt 의존성 추가
 
     const panRight = useCallback(() => {
         const now = Date.now();
         let sIso: string;
         let eIso: string;
-        if (isRangeMode) {
-            const s = new Date(toIsoLocal(startAt)!);
-            const e = new Date(toIsoLocal(endAt)!);
-            sIso = new Date(s.getTime() + windowMs).toISOString();
-            eIso = new Date(e.getTime() + windowMs).toISOString();
-            if (new Date(eIso).getTime() > now) {
-                eIso = new Date(now).toISOString();
-                sIso = new Date(now - windowMs).toISOString();
+
+        // ✅ 현재 범위가 있으면 그 기준으로 이동
+        if (startAt && endAt) {
+            const currentStart = new Date(startAt);
+            const currentEnd = new Date(endAt);
+
+            if (config.preset === '1day') {
+                // 현재 표시된 날짜의 다음날
+                const nextDayStart = new Date(currentStart);
+                nextDayStart.setDate(currentStart.getDate() + 1);
+                nextDayStart.setHours(0, 0, 0, 0);
+
+                const nextDayEnd = new Date(nextDayStart);
+                nextDayEnd.setHours(23, 59, 59, 999);
+
+                // ✅ 다음날 시작이 오늘보다 미래면 차단
+                if (nextDayStart.getTime() > now) {
+                    log(`미래로 이동 불가`);
+                    return;
+                }
+
+                sIso = nextDayStart.toISOString();
+                eIso = nextDayEnd.toISOString();
+            } else if (config.preset === '1week') {
+                // 현재 표시된 주의 다음주
+                const nextWeekStart = new Date(currentStart);
+                nextWeekStart.setDate(currentStart.getDate() + 7);
+
+                const nextWeekEnd = new Date(currentEnd);
+                nextWeekEnd.setDate(currentEnd.getDate() + 7);
+
+                // ✅ 다음주 시작이 오늘보다 미래면 차단
+                if (nextWeekStart.getTime() > now) {
+                    log(`미래로 이동 불가`);
+                    return;
+                }
+
+                sIso = nextWeekStart.toISOString();
+                eIso = nextWeekEnd.toISOString();
+            } else if (config.preset === '1month') {
+                // 현재 표시된 달의 다음달
+                const nextMonthStart = new Date(currentStart);
+                nextMonthStart.setMonth(currentStart.getMonth() + 1);
+
+                const nextMonthEnd = new Date(nextMonthStart);
+                nextMonthEnd.setMonth(nextMonthStart.getMonth() + 1);
+                nextMonthEnd.setDate(0); // 다음달 마지막 날
+                nextMonthEnd.setHours(23, 59, 59, 999);
+
+                // ✅ 다음달 시작이 오늘보다 미래면 차단
+                if (nextMonthStart.getTime() > now) {
+                    log(`미래로 이동 불가`);
+                    return;
+                }
+
+                sIso = nextMonthStart.toISOString();
+                eIso = nextMonthEnd.toISOString();
+            } else if (config.preset === '1year') {
+                // 현재 표시된 연도의 다음해
+                const nextYearStart = new Date(currentStart);
+                nextYearStart.setFullYear(currentStart.getFullYear() + 1);
+
+                const nextYearEnd = new Date(nextYearStart);
+                nextYearEnd.setMonth(11, 31);
+                nextYearEnd.setHours(23, 59, 59, 999);
+
+                // ✅ 다음해 시작이 오늘보다 미래면 차단
+                if (nextYearStart.getTime() > now) {
+                    log(`미래로 이동 불가`);
+                    return;
+                }
+
+                sIso = nextYearStart.toISOString();
+                eIso = nextYearEnd.toISOString();
+            } else {
+                return;
             }
         } else {
-            eIso = new Date(now).toISOString();
-            sIso = new Date(now - windowMs).toISOString();
+            // ✅ 범위가 없으면 오늘로 돌아가기
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            if (config.preset === '1day') {
+                sIso = today.toISOString();
+                const todayEnd = new Date(today);
+                todayEnd.setHours(23, 59, 59, 999);
+                eIso = todayEnd.toISOString();
+            } else if (config.preset === '1week') {
+                const weekday = today.getDay();
+                const thisMonday = new Date(today);
+                thisMonday.setDate(today.getDate() - ((weekday + 6) % 7));
+                thisMonday.setHours(0, 0, 0, 0);
+
+                const thisSunday = new Date(thisMonday);
+                thisSunday.setDate(thisMonday.getDate() + 6);
+                thisSunday.setHours(23, 59, 59, 999);
+
+                sIso = thisMonday.toISOString();
+                eIso = thisSunday.toISOString();
+            } else if (config.preset === '1month') {
+                const firstDay = new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0, 0);
+                const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+
+                sIso = firstDay.toISOString();
+                eIso = lastDay.toISOString();
+            } else if (config.preset === '1year') {
+                const firstDay = new Date(today.getFullYear(), 0, 1, 0, 0, 0, 0);
+                const lastDay = new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
+
+                sIso = firstDay.toISOString();
+                eIso = lastDay.toISOString();
+            } else {
+                return;
+            }
         }
+
         setStartAt(toLocalInputString(new Date(sIso)));
         setEndAt(toLocalInputString(new Date(eIso)));
-    }, [isRangeMode, startAt, endAt, windowMs]);
+        log(`우 이동: ${config.label} 단위`);
+    }, [config, log, startAt, endAt]); // ✅ 의존성에 startAt, endAt 추가
 
     const setRelativeRange = (minutes: number) => {
         const end = new Date();
