@@ -288,7 +288,19 @@ export default function ModbusContainer() {
      * 데이터 배열로부터 각 컬럼별 통계 계산
      */
     const stats = useMemo(() => {
-        const keys: string[] = ['active_power', 'voltage_ll', 'voltage_ln', 'current', 'active_energy', 'peak_power'];
+        const keys: string[] = [
+            'active_power', // 유효 전력
+            'reactive_power', // ✅ 추가: 무효 전력
+            'apparent_power', // ✅ 추가: 피상 전력
+            'voltage_ll', // 선간 전압
+            'voltage_ln', // 상전압
+            'current', // 전류
+            'power_factor', // ✅ 추가: 역률
+            'active_energy', // 유효 전력량
+            'reactive_energy', // ✅ 추가: 무효 전력량
+            'apparent_energy', // ✅ 추가: 피상 전력량
+            'peak_power', // 피크 전력
+        ];
         const s: Record<string, any> = {};
         for (const k of keys) s[k] = calcStats(data, k);
         return s as Record<string, { avg: number | null; max: number | null; min: number | null; count: number }>;

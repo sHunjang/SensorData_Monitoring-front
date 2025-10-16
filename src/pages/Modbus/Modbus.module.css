@@ -219,9 +219,9 @@
 /* STATS grid: 반응형 개선 */
 .statsGrid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 12px;
-    margin-top: 4px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+    /* margin-bottom: 16px; */
 }
 
 .statCard {
