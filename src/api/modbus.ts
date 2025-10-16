@@ -41,6 +41,11 @@ export interface ModbusRealtimeResponse {
     current: number | null;
     power: number | null;
     energy: number | null;
+    reactive_power?: number | null;
+    apparent_power?: number | null;
+    power_factor?: number | null;
+    reactive_energy?: number | null;
+    apparent_energy?: number | null;
 }
 
 export interface ModbusTodayEnergyResponse {

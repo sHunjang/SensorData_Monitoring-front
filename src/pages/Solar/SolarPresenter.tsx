@@ -91,7 +91,7 @@ export default function SolarPresenter({
     return (
         <div className={styles.container}>
             <div className={styles.content}>
-                {/* Header */}
+                {/* Header
                 <div className={styles.header}>
                     <div>
                         <h1 className={styles.title}>SOLAR SENSOR {deviceId}</h1>
@@ -103,6 +103,26 @@ export default function SolarPresenter({
                             {fmt(currentValue)} <span style={{ fontSize: 12 }}>W/m²</span>
                         </p>
                         <p className={styles.priceChange}>{currentValue !== null ? 'Live' : 'No data'}</p>
+                    </div>
+                </div> */}
+
+                {/* Stats */}
+                <div className={styles.statsGrid}>
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>평균</div>
+                        <div className={styles.statValue}>{fmt(stats?.avg)}</div>
+                    </div>
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>최대</div>
+                        <div className={styles.statValue}>{fmt(stats?.max)}</div>
+                    </div>
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>최소</div>
+                        <div className={styles.statValue}>{fmt(stats?.min)}</div>
+                    </div>
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>샘플 수</div>
+                        <div className={styles.statValue}>{stats?.count ?? 0}</div>
                     </div>
                 </div>
 
@@ -194,26 +214,6 @@ export default function SolarPresenter({
                         }}
                         height={420}
                     />
-                </div>
-
-                {/* Stats */}
-                <div className={styles.statsGrid}>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>평균</div>
-                        <div className={styles.statValue}>{fmt(stats?.avg)}</div>
-                    </div>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>최대</div>
-                        <div className={styles.statValue}>{fmt(stats?.max)}</div>
-                    </div>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>최소</div>
-                        <div className={styles.statValue}>{fmt(stats?.min)}</div>
-                    </div>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>샘플 수</div>
-                        <div className={styles.statValue}>{stats?.count ?? 0}</div>
-                    </div>
                 </div>
 
                 {/* Logs */}

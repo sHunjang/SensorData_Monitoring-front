@@ -129,7 +129,7 @@ export default function EnvPresenter({
     return (
         <div className={styles.container}>
             <div className={styles.content}>
-                {/* Header */}
+                {/* Header
                 <div className={styles.header}>
                     <div>
                         <h1 className={styles.title}>ENV SENSOR {deviceId}</h1>
@@ -145,6 +145,26 @@ export default function EnvPresenter({
                             <span>{delta >= 0 ? '▲' : '▼'}</span> {changePct} ({delta >= 0 ? '+' : ''}
                             {fmt(delta)})
                         </p>
+                    </div>
+                </div> */}
+
+                {/* Stats */}
+                <div className={styles.statsGrid}>
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>평균</div>
+                        <div className={styles.statValue}>{fmt(currentStat.avg)}</div>
+                    </div>
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>최대</div>
+                        <div className={styles.statValue}>{fmt(currentStat.max)}</div>
+                    </div>
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>최소</div>
+                        <div className={styles.statValue}>{fmt(currentStat.min)}</div>
+                    </div>
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>샘플 수</div>
+                        <div className={styles.statValue}>{currentStat.count ?? 0}</div>
                     </div>
                 </div>
 
@@ -204,6 +224,18 @@ export default function EnvPresenter({
                                 value={currentPeakLimit ?? ''}
                                 onChange={(e) => handlePeakLimitChange(e.target.value)}
                                 placeholder="예: 10.0"
+                                style={{
+                                    background: '#253347',
+                                    border: '1px solid #2a3441',
+                                    padding: '8px 12px',
+                                    borderRadius: '4px',
+                                    fontSize: '13px',
+                                    color: '#94a3b8',
+                                    fontWeight: '600',
+                                    transition: 'all 0.2s',
+                                    marginBottom: '4px',
+                                    width: '100px',
+                                }}
                             />
                         </div>
 
@@ -280,26 +312,6 @@ export default function EnvPresenter({
                         }}
                         height={420}
                     />
-                </div>
-
-                {/* Stats */}
-                <div className={styles.statsGrid}>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>평균</div>
-                        <div className={styles.statValue}>{fmt(currentStat.avg)}</div>
-                    </div>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>최대</div>
-                        <div className={styles.statValue}>{fmt(currentStat.max)}</div>
-                    </div>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>최소</div>
-                        <div className={styles.statValue}>{fmt(currentStat.min)}</div>
-                    </div>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>샘플 수</div>
-                        <div className={styles.statValue}>{currentStat.count ?? 0}</div>
-                    </div>
                 </div>
 
                 {/* Logs */}

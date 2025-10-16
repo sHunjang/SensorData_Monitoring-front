@@ -55,11 +55,11 @@ const MAP = (row: any) => {
         current: row.current ?? null, // 전류 (A)
         active_energy: row.energy_delta ?? null, // 소비 전력량 (kWh)
         peak_power: row.peak_power ?? null, // 피크 전력 (15분 이상 해상도)
-        reactive_power: null, // 무효 전력 (미지원)
-        apparent_power: null, // 피상 전력 (미지원)
-        power_factor: null, // 역률 (미지원)
-        reactive_energy: null, // 무효 전력량 (미지원)
-        apparent_energy: null, // 피상 전력량 (미지원)
+        reactive_power: row.reactive_power ?? null, // 무효 전력
+        apparent_power: row.apparent_power ?? null, // 피상 전력
+        power_factor: row.power_factor ?? null, // 역률
+        reactive_energy: row.reactive_energy ?? null, // 무효 전력량
+        apparent_energy: row.apparent_energy ?? null, // 피상 전력량
     };
 
     console.log('[MAP] Mapped row:', mapped); // 디버깅용

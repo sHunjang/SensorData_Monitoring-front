@@ -145,7 +145,7 @@ export default function ModbusPresenter({
     return (
         <div className={styles.container}>
             <div className={styles.content}>
-                {/* Header */}
+                {/* Header
                 <div className={styles.header}>
                     <div>
                         <h1 className={styles.title}>MODBUS SENSOR {deviceId}</h1>
@@ -160,6 +160,26 @@ export default function ModbusPresenter({
                             <span>{delta >= 0 ? '▲' : '▼'}</span> {changePct} ({delta >= 0 ? '+' : ''}
                             {fmt(delta)})
                         </p>
+                    </div>
+                </div> */}
+
+                {/* Stats */}
+                <div className={styles.statsGrid}>
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>평균</div>
+                        <div className={styles.statValue}>{fmt(currentStat?.avg)}</div>
+                    </div>
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>최대</div>
+                        <div className={styles.statValue}>{fmt(currentStat?.max)}</div>
+                    </div>
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>최소</div>
+                        <div className={styles.statValue}>{fmt(currentStat?.min)}</div>
+                    </div>
+                    <div className={styles.statCard}>
+                        <div className={styles.statLabel}>샘플 수</div>
+                        <div className={styles.statValue}>{currentStat?.count ?? 0}</div>
                     </div>
                 </div>
 
@@ -212,6 +232,11 @@ export default function ModbusPresenter({
                                     <option value="reactive_power">무효전력 (kVAR)</option>
                                     <option value="apparent_power">피상전력 (kVA)</option>
                                 </optgroup>
+                                <optgroup label="📈 전력량">
+                                    <option value="active_energy">유효전력량 (kWh)</option>
+                                    <option value="reactive_energy">무효전력량 (kVArh)</option>
+                                    <option value="apparent_energy">피상전력량 (kVAh)</option>
+                                </optgroup>
                                 <optgroup label="⚡ 전압">
                                     <option value="voltage_ll">선간전압 (V)</option>
                                     <option value="voltage_ln">상전압 (V)</option>
@@ -219,11 +244,6 @@ export default function ModbusPresenter({
                                 <optgroup label="🔋 전류 & 역률">
                                     <option value="current">전류 (A)</option>
                                     <option value="power_factor">역률</option>
-                                </optgroup>
-                                <optgroup label="📈 전력량">
-                                    <option value="active_energy">유효전력량 (kWh)</option>
-                                    <option value="reactive_energy">무효전력량 (kVArh)</option>
-                                    <option value="apparent_energy">피상전력량 (kVAh)</option>
                                 </optgroup>
                             </select>
                         </div>
@@ -236,6 +256,18 @@ export default function ModbusPresenter({
                                 value={currentPeakLimit ?? ''}
                                 onChange={(e) => handlePeakLimitChange(e.target.value)}
                                 placeholder="예: 10.0"
+                                style={{
+                                    background: '#2b2f36',
+                                    border: '1px solid #2a3441',
+                                    padding: '8px 12px',
+                                    borderRadius: '4px',
+                                    fontSize: '13px',
+                                    color: '#f7f8fa',
+                                    fontWeight: '600',
+                                    transition: 'all 0.2s',
+                                    marginBottom: '4px',
+                                    width: '100px',
+                                }}
                             />
                         </div>
 
@@ -309,26 +341,6 @@ export default function ModbusPresenter({
                         }}
                         height={420}
                     />
-                </div>
-
-                {/* Stats */}
-                <div className={styles.statsGrid}>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>평균</div>
-                        <div className={styles.statValue}>{fmt(currentStat?.avg)}</div>
-                    </div>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>최대</div>
-                        <div className={styles.statValue}>{fmt(currentStat?.max)}</div>
-                    </div>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>최소</div>
-                        <div className={styles.statValue}>{fmt(currentStat?.min)}</div>
-                    </div>
-                    <div className={styles.statCard}>
-                        <div className={styles.statLabel}>샘플 수</div>
-                        <div className={styles.statValue}>{currentStat?.count ?? 0}</div>
-                    </div>
                 </div>
 
                 {/* Logs */}

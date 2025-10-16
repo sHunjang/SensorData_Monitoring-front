@@ -129,7 +129,7 @@ export default function ZoomPanControls({
                 </div>
             )}
 
-            {/* Quick ranges */}
+            {/* Quick ranges
             {setRelativeRange && (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <button style={btnBase} onClick={() => setRelativeRange(60)}>
@@ -142,7 +142,7 @@ export default function ZoomPanControls({
                         7d
                     </button>
                 </div>
-            )}
+            )} */}
 
             {/* Refresh */}
             {onRefresh && (
