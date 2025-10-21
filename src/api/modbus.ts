@@ -15,14 +15,29 @@ export interface ModbusQueryParams {
     deviceid?: number;
 }
 
+// src/api/modbus.ts
+
 export interface ModbusDataPoint {
     bucket: string;
-    voltage: number | null;
-    current: number | null;
-    power: number | null;
-    energy_delta: number | null;
-    peak_power?: number | null;
+
+    // ✅ 1분 해상도 데이터
+    voltage: number | null;              // 평균 전압 (V)
+    current: number | null;              // 평균 전류 (A)
+    power: number | null;                // 평균 유효전력 (kW)
+    energy_delta: number | null;         // 전력량 delta (kWh)
+
+    // ✅ 추가 전력 데이터
+    reactive_power?: number | null;      // 무효전력 (kvar)
+    apparent_power?: number | null;      // 피상전력 (kVA)
+    power_factor?: number | null;        // 역률
+
+    // ✅ 15분 이상 해상도 데이터
+    peak_power?: number | null;          // 피크 전력 (kW)
+
+    // ✅ 메타 데이터
+    data_points?: number;                // 샘플 수
 }
+
 
 export interface ModbusQueryResponse {
     device_id: number;
@@ -156,4 +171,22 @@ export async function fetchModbusTodayEnergy(deviceId: number) {
         kwh: data.energy_kwh,
         raw: data,
     };
+}
+
+
+export interface ModbusTotalEnergyResponse {
+    device_id: number;
+    time_stamp: string | null;
+    total_active_energy_kwh: number;
+    total_reactive_energy_kvarh: number;
+    total_apparent_energy_kvah: number;
+    wire_type: '4wire' | '3wire';
+}
+
+/**
+ * 총 누적 전력량 조회 (전력량계 시작부터)
+ */
+export async function fetchTotalEnergy(deviceId: number): Promise<ModbusTotalEnergyResponse> {
+    const q = new URLSearchParams({ deviceid: String(deviceId) });
+    return await fetchJSON<ModbusTotalEnergyResponse>(`/data/modbus/total-energy?${q.toString()}`);
 }

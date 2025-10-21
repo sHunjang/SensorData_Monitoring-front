@@ -14,6 +14,7 @@ type Column =
     | 'current'
     | 'power_factor'
     | 'active_energy'
+    | 'total_energy' // ✅ 추가: 총 누적 전력량
     | 'reactive_energy'
     | 'apparent_energy';
 
@@ -51,6 +52,7 @@ type Props = {
 
     panLeft?: () => void;
     panRight?: () => void;
+    totalEnergy?: number | null; // ✅ 추가
 };
 
 const LABELS: Record<Column, string> = {
@@ -62,6 +64,7 @@ const LABELS: Record<Column, string> = {
     current: '전류 (A)',
     power_factor: '역률',
     active_energy: '유효전력량 (kWh)',
+    total_energy: '총 누적 전력량 (kWh)', // ✅ 추가
     reactive_energy: '무효전력량 (kVArh)',
     apparent_energy: '피상전력량 (kVAh)',
 };
@@ -96,6 +99,7 @@ export default function ModbusPresenter({
     isRangeMode,
     panLeft,
     panRight,
+    totalEnergy, // ✅ 추가
 }: Props) {
     if (loading)
         return (
@@ -145,25 +149,7 @@ export default function ModbusPresenter({
     return (
         <div className={styles.container}>
             <div className={styles.content}>
-                {/* Header
-                <div className={styles.header}>
-                    <div>
-                        <h1 className={styles.title}>MODBUS SENSOR {deviceId}</h1>
-                        <p className={styles.subtitle}>
-                            {LABELS[column]} · {zoomLabel}
-                        </p>
-                    </div>
-
-                    <div className={styles.priceInfo}>
-                        <p className={styles.currentPrice}>{fmt(currentValue)}</p>
-                        <p className={styles.priceChange} style={{ color: delta >= 0 ? '#0ecb81' : '#f6465d' }}>
-                            <span>{delta >= 0 ? '▲' : '▼'}</span> {changePct} ({delta >= 0 ? '+' : ''}
-                            {fmt(delta)})
-                        </p>
-                    </div>
-                </div> */}
-
-                {/* Stats */}
+                {/* Stats - 총 전력량 카드 추가 */}
                 <div className={styles.statsGrid}>
                     <div className={styles.statCard}>
                         <div className={styles.statLabel}>평균</div>
@@ -180,6 +166,23 @@ export default function ModbusPresenter({
                     <div className={styles.statCard}>
                         <div className={styles.statLabel}>샘플 수</div>
                         <div className={styles.statValue}>{currentStat?.count ?? 0}</div>
+                    </div>
+
+                    {/* ✅ 총 누적 전력량 카드 추가 */}
+                    <div
+                        className={styles.statCard}
+                        style={{
+                            gridColumn: 'span 2',
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            border: '2px solid #764ba2',
+                        }}
+                    >
+                        <div className={styles.statLabel} style={{ color: '#fff', fontSize: '0.9rem' }}>
+                            🔋 전력량(kWh)
+                        </div>
+                        <div className={styles.statValue} style={{ color: '#fff', fontSize: '2rem' }}>
+                            {typeof totalEnergy === 'number' ? `${totalEnergy.toFixed(2)} kWh` : '데이터 없음'}
+                        </div>
                     </div>
                 </div>
 
@@ -233,9 +236,10 @@ export default function ModbusPresenter({
                                     <option value="apparent_power">피상전력 (kVA)</option>
                                 </optgroup>
                                 <optgroup label="📈 전력량">
-                                    <option value="active_energy">유효전력량 (kWh)</option>
-                                    <option value="reactive_energy">무효전력량 (kVArh)</option>
-                                    <option value="apparent_energy">피상전력량 (kVAh)</option>
+                                    {/* <option value="active_energy">유효전력량 (kWh)</option> */}
+                                    <option value="total_energy">전력량 (kWh)</option> {/* ✅ 추가 */}
+                                    {/* <option value="reactive_energy">무효전력량 (kVArh)</option> */}
+                                    {/* <option value="apparent_energy">피상전력량 (kVAh)</option> */}
                                 </optgroup>
                                 <optgroup label="⚡ 전압">
                                     <option value="voltage_ll">선간전압 (V)</option>
